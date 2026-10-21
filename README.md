@@ -1,92 +1,93 @@
-# DBP API
+# dbstim
 
-Select database items, assign them to subjects, download them, and report
-presentation progress. Python 3.11+; no playback framework or runtime dependencies.
+Create experiments on [dbstimuli.com](https://dbstimuli.com), retrieve assigned
+videos, and report presentation progress from your own task program.
 
-References: [classes and methods](docs/api-classes.md) · [server-to-local flow](docs/server-to-local-flow.md).
+**Client → Experiment → Subject → Session → Run → Trial**
 
-## Notebook
+## Try the notebook
 
-```sh
-git clone https://github.com/lobennett/dbp-api.git
-cd dbp-api
-uv run --extra demo jupyter lab examples/dbp_api_demo.ipynb
+```bash
+git clone https://github.com/lobennett/dbstim.git
+cd dbstim
+uv sync --extra demo
+uv run marimo edit notebooks/api.py
 ```
 
-The [notebook](examples/dbp_api_demo.ipynb) walks through sign-in, metric coverage,
-creation or loading, assignments, downloads, and presentation tracking.
-Each major class has a short reference beside its example.
-Edit the URL and username; only the password is prompted. Enter `"new"` to create,
-or a saved experiment ID to reopen. Downloads happen only when you run that step.
+Enter your website credentials in the notebook. Never save passwords in code.
+The new session endpoints must be deployed before using this version against
+a server. Older `dbp_api` clients remain available at their pinned Git revisions.
 
-The basic demo creates two subjects with five full videos each on a DBP `/api/v1`
-server. The optional foil example also needs `DBP_CUT_BALANCE_CANDIDATES` and
-`DBP_CUT_BALANCE_SHA256` configured for measured complementary halves.
-Media and candidate data are not included. Use HTTPS except on localhost.
-Clear outputs before sharing; previews embed video data.
-
-## Interface
+## Create or load
 
 ```python
 from getpass import getpass
-from dbp_api import Client, MetricFilter
+from dbstim import Client, MetricFilter
 
-client = Client("http://127.0.0.1:8773")
-client.login("your-username", getpass("Website password: "))
+client = Client("your-username", getpass("Website password: "))
+client.metrics()
+client.experiments()
+
 experiment = client.create_experiment(
-    name="Demo", seed="demo-1",
-    filters=[MetricFilter("duration_seconds", "gte", 10)],
+    "Memory demo", subjects=5, sessions_per_subject=1, runs_per_session=2,
+    trials_per_run=24, foils_per_run=4, shared_fraction=0.1,
+    filters=[MetricFilter("duration_seconds", "gte", 10),
+             MetricFilter("duration_seconds", "lte", 20)], seed="demo-1",
 )
-assignments = experiment.assign(subjects=2, items_per_subject=10, blocks=2)
-print(assignments.summary())
-session = assignments.subject("subject-001")
-session.download("./subject-videos")
-# Your task reports session.started(trial) and session.completed(trial).
-client.logout()
+experiment.summary()
+experiment.publish()
 ```
 
-| Type | Purpose |
-|---|---|
-| `Experiment` | Local recipe with filters, dataset version, and string seed. |
-| `Assignments` | Saved, published subject assignments. `assign()` creates these. |
-| `Session` | One subject's downloads, journal, and synchronized progress. |
-| `Trial` | Media ID, block, role, optional `Segment`, and local path. |
-| `Progress` | Server-confirmed started/completed state for each trial. |
+Alternatively: `client.experiment("Memory demo")`, or
+`client.experiment(id="exact-revision-id")`. Name lookup selects the latest
+published revision; ambiguous names require an ID. Creation saves a draft.
 
-`items_per_subject` counts originals across all blocks. Foils and repeats are
-extra. Set `foils_per_block`, `shared_per_subject`, or `repeats_per_subject` as needed.
-`assignments.summary()` returns one dictionary per subject: trial and video counts,
-full/segment/repeat/foil counts, and measured cut/no-cut/unknown counts. It reads
-the actual published trials, not estimates from the settings.
-To resume, use `client.assignments(saved_experiment_id)` instead of calling
-`assign()` again. New assignment calls create new records. Downloads require a
-new destination and verify file hashes; reopening the same workspace restores paths.
+`sampling` accepts `"random"`, `"balanced"`, or `"unique"` YouTube channels.
+Foils and repeats count toward `trials_per_run`. With 24 trials and four foils,
+each run has 16 full videos, four first halves, and four complementary halves.
+The shared fraction counts unique parent videos, rounds down, and uses the same
+shared sources for every subject with independently seeded order.
 
-`started()` and `completed()` save locally before synchronization. Stop if starting
-fails. Complete only after successful playback; these calls do not verify playback.
-`pending_trials` excludes previously started trials. Inspect `incomplete_trials`
-after interruption—nothing silently replays. Retry `sync()` after connection loss;
-event IDs prevent duplicate uploads. Other devices see only synchronized events.
-Keep `.dbp/` journals until upload is confirmed. Calls involve network I/O, so keep
-them outside timing-critical rendering code. The server currently supports videos;
-`Image` and `Stimulus` are descriptors for future support, not working modalities.
+## Present
 
-## Use with a presentation framework
+```python
+subject = experiment.subject("subject-001")
+session = subject.session("session-001")
+session.download("downloads/subject-001/session-001")
+session.start()
+run = session.run("latest")
 
-Create and publish once in the notebook. Save the experiment ID, then reopen it
-in any task notebook or program with `client.assignments(experiment_id)`.
-Choose a subject, download its fixed trials, and pass each local file to your
-playback code. Report started/completed events through the session; do not call
-`assign()` again to launch an existing experiment.
+while (trial := run.next_trial()) is not None:
+    path = run.media(trial)
+    run.record(trial, "started")
+    present(path)  # Your PGL, PsychoPy, or other presentation function.
+    run.record(trial, "completed", result={"response": "seen"})
 
-PGL and PsychoPy can use this Python client. Playback, timing, responses, and
-task-result storage remain the presentation program's responsibility. A jsPsych
-task needs a JavaScript adapter to the authenticated HTTP API (or a backend bridge);
-this repository does not yet provide that adapter. No framework is launched by
-the API itself. See the notebook's progress example before connecting real playback.
-
-## Tests
-
-```sh
-uv run python -m unittest discover -s tests
+session.finish("interrupted")
 ```
+
+Choose subsequent runs explicitly from `session.run_ids`. Finish `"completed"`
+only after all session trials; use `"failed"` or `"interrupted"` when stopping early.
+Stop presentation on any API error. Retry an unacknowledged call unchanged.
+Started-but-unconfirmed trials block automatic continuation.
+Their skip/retry policy remains undecided; do not mark uncertain trials completed.
+
+In another program, reuse the download with
+`subject.session("session-001", directory="downloads/subject-001/session-001")`.
+`run.results` retrieves task results saved on the server.
+
+Media modes: `"local"` verifies downloaded bytes; `"cache"` downloads on demand;
+`"remote"` returns a five-minute playback URL. Halves are already rendered.
+Request remote links just before playback. The server currently limits source
+files to 32 MiB and rendered segments to 60 seconds.
+The server stores progress; another device reads the same state.
+`session.start(takeover=True)` explicitly replaces an active presenter after review.
+
+## Development
+
+```bash
+uv run python -m unittest discover -s tests -v
+uv run marimo check notebooks/api.py
+```
+
+[Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)

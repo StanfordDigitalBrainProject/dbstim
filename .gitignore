@@ -3,6 +3,9 @@ __pycache__/
 .pytest_cache/
 .venv/
 .dbp/
+.dbstim/
+__marimo__/
+downloads/
 .ipynb_checkpoints/
 dbp-demo-download/
 *.egg-info/

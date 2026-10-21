@@ -1,48 +1,33 @@
-# Server-to-local video flow
-
-The databases store metadata and assignments; videos are separate files.
+# Assignment and presentation flow
 
 ```mermaid
-flowchart TD
-    subgraph Server["DBP server"]
-        Catalog[("Catalog database<br/>Video IDs, captions, transcripts")]
-        Metrics[("Metrics database<br/>Duration, cuts, text labels, etc.")]
-        AccountDB[("Account database<br/>Collections, assignments,<br/>published manifests, trial events")]
-        Media[("Video files<br/>Server-accessible storage")]
-        API["Authenticated DBP API"]
-        Prepare["Prepare assigned media<br/>Full video OR rendered half"]
-
-        Catalog --> API
-        Metrics --> API
-        API <--> AccountDB
-        Media --> Prepare
-        API -->|"Look up assigned trial"| Prepare
-    end
-
-    subgraph Local["Your computer"]
-        Notebook["Notebook + Python client"]
-        Assign["Create and publish assignments<br/>or reopen an experiment ID"]
-        Subject["Choose subject"]
-        Manifest["Fetch and validate manifest<br/>Fixed trial order + segment boundaries"]
-        Download["Download each trial<br/>Verify file size and SHA-256"]
-        Files[("Local download folder<br/>MP4 files + manifest.json")]
-        Task["Your presentation program<br/>PGL, PsychoPy, etc."]
-        Journal[("Local progress.sqlite3<br/>Started/completed events")]
-
-        Notebook --> Assign --> Subject --> Manifest --> Download
-        Download --> Files --> Task
-        Task -->|"Explicit progress calls"| Journal
-    end
-
-    Assign <-->|"Save or retrieve assignments"| API
-    Subject -->|"Request subject manifest"| API
-    API -->|"Published manifest"| Manifest
-    Download -->|"Request media by trial ID"| API
-    Prepare -->|"MP4 bytes + checksum"| Download
-    Journal -->|"Synchronize progress"| API
+flowchart LR
+    Catalog[(Catalog and metrics)] --> API[Authenticated website API]
+    API --> Draft[Draft experiment]
+    Draft --> Publish[Publish fixed assignments]
+    Publish --> Manifest[Subject / session / run manifest]
+    Manifest --> SDK[dbstim client]
+    GCP[(GCP video storage)] --> Render[Full video or rendered half]
+    Render --> Local[Verified local cache]
+    Render --> Remote[Temporary playback URL]
+    Local --> Task[PGL / PsychoPy / other task]
+    Remote --> Task
+    SDK --> Task
+    Task -->|Explicit start / completion / result| API
+    API --> Events[(Server progress and results)]
+    Events -->|Resume from another device| SDK
 ```
 
-- Reopening an experiment ID does not resample.
-- Halves are rendered server-side; downloaded files are ready to present.
-- Downloads do not record presentations. The task must report progress explicitly.
-- The notebook uses the authenticated HTTP API, not a direct database connection.
+1. Creation selects sources using the saved filters, channel sampling method and
+   seed. Publishing freezes each subject's trial order and segment intervals.
+2. `Subject` validates the manifest hash. A `Session` exposes only its assigned runs.
+3. Downloads verify length and SHA-256 and save a receipt alongside each MP4.
+   Remote links authorize one pinned rendition for five minutes and expire on logout.
+4. `Session.start()` claims presentation. The task reports each trial before and
+   after presenting it; the server acknowledges and stores those events atomically.
+5. A reopened session reads server progress. Unconfirmed trials require review;
+   downloading or previewing does not count as presentation.
+
+No Google credentials are required on the researcher's computer. Downloaded
+files are independent of session progress: deleting the cache does not reset
+server records. Optional task results remain attached to immutable server commands.
