@@ -92,4 +92,4 @@ session with `finish("failed")`.
 later runs from `session.run_ids`. `run.results` reads reported results from the
 server. Deleting local downloads never resets server progress.
 
-[API objects](api-classes.md)
+[API objects](api-classes.md) · [Metric storage and filters](metrics-and-filters.md)

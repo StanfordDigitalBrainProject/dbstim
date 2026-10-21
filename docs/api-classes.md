@@ -99,4 +99,4 @@ Workflow classes live in `src/dbstim/workflow.py`, authentication in `client.py`
 and frozen data types in `models.py`. Video is currently the supported modality.
 PGL/PsychoPy owns presentation; **the server owns progress**.
 
-[Media and session flow](server-to-local-flow.md)
+[Metric storage and filters](metrics-and-filters.md) · [Media and session flow](server-to-local-flow.md)
