@@ -1,45 +1,102 @@
-# Objects
+# API objects
 
-| Object | Methods | Data |
-| --- | --- | --- |
-| `Client` | `metrics()`, `experiments()`, `experiment(name)` or `experiment(id=...)`, `create_experiment(...)` | `username`, `url` |
-| `Experiment` | `summary()`, `publish()`, `subject(id)` | `id` |
-| `Subject` | `session(id, directory=None)` | `id`, `session_ids`, `experiment` |
-| `Session` | `download(directory)`, `run(id="latest")`, `start(takeover=False)`, `finish(status)` | `id`, `run_ids`, `subject` |
-| `Run` | `next_trial()`, `media(trial, mode="local")`, `record(trial, status, result=None)` | `id`, `trials`, `results`, `session` |
-| `Trial` | None | `trial_id`, `stimulus_id`, `position`, `role`, `media_type`, `segment` |
-
-`Client(username, password, url="https://dbstimuli.com")` signs in immediately.
-Use `close()` or a `with` block to discard local credentials.
-
-`Trial`, `Segment`, and `MetricFilter` are frozen dataclasses in `models.py`.
-Trial positions are one-based within the run. Roles are `parent`, `repeat`, or
-`foil`. A parent can be a full video or an initial half. Segment boundaries
-describe the source interval; downloaded halves are ready to play from time zero.
-Video is currently the only supported modality.
+Start with `Client(username, password)`. It signs in to **dbstimuli.com**;
+`url=` selects another server. Arrows below show how you obtain each object.
 
 ```mermaid
 classDiagram
-    Client --> Experiment : finds or creates
-    Experiment --> Subject : assigns
-    Subject --> Session : contains
-    Session --> Run : contains
-    Run --> Trial : orders
-    Trial --> Segment : optional interval
-    Client --> MetricFilter : selection
+    direction TB
+    class Client {
+        username
+        url
+        metrics()
+        experiments()
+        create_experiment(name, settings) Experiment
+        experiment(name_or_id) Experiment
+    }
+    class Experiment {
+        id
+        summary()
+        publish() Experiment
+        subject(id) Subject
+    }
+    class Subject {
+        id
+        session_ids
+        session(id, directory) Session
+    }
+    class Session {
+        id
+        run_ids
+        download(directory) Path
+        run(id) Run
+        start(takeover)
+        finish(status)
+    }
+    class Run {
+        id
+        trials
+        results
+        next_trial() Trial_or_None
+        media(trial, mode) Path_or_URL
+        record(trial, status, result)
+    }
+    class Trial {
+        <<frozen dataclass>>
+        trial_id
+        stimulus_id
+        position
+        role
+        media_type
+        segment
+    }
+    class Segment {
+        <<frozen dataclass>>
+        start_seconds
+        end_seconds
+    }
+    class MetricFilter {
+        <<frozen dataclass>>
+        metric_id
+        operator
+        value
+        to_dict()
+    }
+    Client --> Experiment : create or load
+    Experiment --> Subject : subject
+    Subject --> Session : session
+    Session --> Run : run
+    Run --> Trial : trials or next_trial
+    Trial --> "0..1" Segment : source interval
+    Client ..> MetricFilter : creation filters
 ```
 
-The server owns assignment order and presentation events. `Run.next_trial()`
-reads current progress; an unresolved start raises `ApiError`. Completed runs
-return `None` and are not automatically replaced with a subsequent run.
-`Run.record()` reports task-observed start/completion, optionally with a JSON
-result. It does not play a video or infer attention.
+Signatures are abbreviated: creation settings are keyword arguments, and lookup
+uses `experiment("Exact name")` or `experiment(id="revision-id")`.
+Name lookup prefers the latest published revision; ambiguous names require an ID.
+Use `Client.close()` or a `with` block when finished.
 
-An interrupted/failed session releases its presentation claim. A new client can
-reopen it and call `start()`. A still-active claim requires explicit takeover.
-An unconfirmed trial remains blocked; review it rather than marking it completed
-merely to continue. Started/completed events and result commands are retained
-in the server's account database.
-`run.results` returns recorded result objects with trial identity, status, receipt
-time and request identity. A separate program can bind an existing download using
-`subject.session(directory=...)`; the files still undergo checksum verification.
+## What the objects mean
+
+- **Experiment:** saved selection and design; publishing freezes assignments.
+- **Subject:** assigned sessions from a published, hash-verified manifest.
+- **Session:** download cache and presentation claim; `finish(status)` accepts
+  `completed`, `interrupted`, or `failed`.
+- **Run:** ordered trials; `next_trial()` reads server progress. `results` is a
+  property containing recorded results, not a method.
+- **Trial:** immutable assignment, not a player or progress record. Positions
+  start at one within each run; roles are `parent`, `repeat`, or `foil`.
+- **Segment:** optional source interval. Initial halves and complementary foils
+  are already rendered for playback from time zero.
+- **MetricFilter:** metric, comparison operator, and threshold used at creation.
+
+`session.run("latest")` selects the most recently started run, or the first if
+none started. An unconfirmed start in any run blocks `next_trial()` for the whole
+session until reviewed. Otherwise, completed runs return `None`; choose later runs
+explicitly.
+
+Workflow classes live in `src/dbstim/workflow.py`, authentication in `client.py`,
+and frozen data types in `models.py`. Video is currently the supported modality.
+PGL/PsychoPy owns presentation; **the server owns progress**.
+
+[Media and session flow](server-to-local-flow.md)
