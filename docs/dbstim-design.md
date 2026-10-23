@@ -56,11 +56,11 @@ record() sends started/completed events with optional task-reported results.
 Retries reuse event identities. The server acknowledges changes; failures stop
 advancement. start() claims one active presenter; takeover requires explicit review.
 finish() accepts completed/interrupted/failed; completion requires all trials confirmed.
-No automatic replay, wrapper, or fabricated viewing confirmation.
+`with session:` only calls start()/finish(); no automatic replay or fabricated confirmation.
 
 Media modes: local verified files, on-demand cache, or temporary authorized remote
 URLs. All resolve the same pinned rendition, including rendered halves. URL-capable
-players can stream; others cache. Proposed default: download before presentation.
+players can stream; others cache. Default: verified file, downloaded first if needed.
 
 ## Delivery
 
@@ -68,7 +68,7 @@ Rename repository/distribution/import to dbstim; update known consumers. Extend 
 server before releasing the SDK; preserve existing manifests/events and map legacy
 blocks to runs in one session. Keep old pinned releases usable.
 
-Replace examples/ with one notebooks/api.py marimo demonstration using explicit
-action controls and uncommitted credentials. Each Markdown document stays ≤500 words.
+Keep one notebooks/api.ipynb walkthrough with direct calls and uncommitted
+credentials. Each Markdown document stays ≤500 words.
 Test allocation, two-client resume/conflicts, retries, media identity, and legacy
 compatibility. No production experiment or progress changes during verification.
