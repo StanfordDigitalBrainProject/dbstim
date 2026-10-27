@@ -13,12 +13,12 @@ or with uv:
 
     uv add "dbstim @ git+https://github.com/lobennett/dbstim.git@v0.5.0"
 
-Pin a release tag or commit for reproducible analyses.
+Pin a tag or commit for reproducible analyses.
 For the example notebook, add the Jupyter extra:
 
     pip install "dbstim[jupyter] @ git+https://github.com/lobennett/dbstim.git@v0.5.0"
 
-Sign in with your dbstimuli.com account; no Google Cloud access or API key is needed.
+Sign in with your dbstimuli.com account; no Google Cloud or API key is needed.
 
 ## Create and publish
 
@@ -38,7 +38,7 @@ experiment = client.create_experiment(
 experiment.publish()
 ```
 
-Reopen it later with `client.experiment("Memory demo")`; if names repeat, the
+Reopen it with `client.experiment("Memory demo")`; if names repeat, the
 error lists the ids for `client.experiment(id=...)`.
 
 ## Present
@@ -102,4 +102,4 @@ The legacy `dbp_api` package (revision `d11933f`) is superseded by `dbstim`.
 uv run python -m unittest discover -s tests -v
 ```
 
-[Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)
+[API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)

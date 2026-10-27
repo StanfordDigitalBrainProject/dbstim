@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dbstim API map</title>
+<meta name="description" content="The current public interface of the dbstim Python package (0.5.0): objects, call sequences, outcomes and recovery. Self-contained; open it directly from disk.">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fbfaf7; --panel: #ffffff; --ink: #1d232b; --muted: #5a6470; --rule: #dedad2; --code-bg: #f2efe8;
+  --http: #1f5fbf; --http-bg: #e6eefb;
+  --local: #3f6b4a; --local-bg: #e7f1e9;
+  --disk: #94600f; --disk-bg: #f8eedb;
+  --yours: #74419c; --yours-bg: #f1e8f8;
+  --bad: #a3392f; --bad-bg: #f8e5e2;
+  --focus: #1f5fbf;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171b; --panel: #1b1f25; --ink: #e7e9ec; --muted: #a4adb8; --rule: #323943; --code-bg: #222831;
+    --http: #8ab4f8; --http-bg: #1d2a40;
+    --local: #8fcf9d; --local-bg: #1c2c22;
+    --disk: #e6b863; --disk-bg: #33291a;
+    --yours: #cfa3f0; --yours-bg: #2d2238;
+    --bad: #f0958a; --bad-bg: #3a2220;
+    --focus: #8ab4f8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171b; --panel: #1b1f25; --ink: #e7e9ec; --muted: #a4adb8; --rule: #323943; --code-bg: #222831;
+  --http: #8ab4f8; --http-bg: #1d2a40;
+  --local: #8fcf9d; --local-bg: #1c2c22;
+  --disk: #e6b863; --disk-bg: #33291a;
+  --yours: #cfa3f0; --yours-bg: #2d2238;
+  --bad: #f0958a; --bad-bg: #3a2220;
+  --focus: #8ab4f8;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 1rem; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+code, pre, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+code { background: var(--code-bg); padding: 0.08em 0.35em; border-radius: 4px; font-size: 0.9em; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 0.9rem 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.86rem; line-height: 1.5; margin: 0.8rem 0; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+a { color: var(--http); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.skip { position: absolute; left: -999px; top: 0; background: var(--panel); padding: 0.5rem 1rem; z-index: 2; }
+.skip:focus { left: 1rem; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; }
+@media (min-width: 1000px) { .wrap { grid-template-columns: 220px minmax(0, 1fr); padding: 0 24px; } }
+header.top { max-width: 1240px; margin: 0 auto; padding: 2rem 16px 1rem; }
+@media (min-width: 1000px) { header.top { padding: 2.5rem 24px 1rem; } }
+h1 { font-size: clamp(1.7rem, 4vw, 2.4rem); line-height: 1.15; margin: 0 0 0.4rem; letter-spacing: -0.01em; }
+.lede { font-size: 1.08rem; color: var(--muted); max-width: 52rem; margin: 0.3rem 0 1rem; }
+.meta { font-size: 0.88rem; color: var(--muted); }
+nav.toc { font-size: 0.92rem; }
+@media (min-width: 1000px) { nav.toc { position: sticky; top: 1rem; align-self: start; max-height: calc(100vh - 2rem); overflow-y: auto; } }
+nav.toc ol { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; }
+@media (min-width: 1000px) { nav.toc ol { display: block; } nav.toc li { margin: 0.35rem 0; } }
+nav.toc a { color: var(--ink); text-decoration: none; }
+nav.toc a:hover { text-decoration: underline; }
+nav.toc .n { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 0.35rem; }
+main { min-width: 0; padding-bottom: 4rem; }
+section { margin: 0 0 3rem; }
+h2 { font-size: 1.45rem; margin: 0 0 0.6rem; padding-top: 0.4rem; border-top: 1px solid var(--rule); }
+h2 .n { color: var(--muted); font-weight: 500; margin-right: 0.4rem; }
+h3 { font-size: 1.1rem; margin: 1.6rem 0 0.4rem; }
+p { max-width: 50rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin: 0.6rem 0 0; padding: 0; list-style: none; font-size: 0.9rem; }
+.b { display: inline-block; font-size: 0.74rem; font-weight: 650; letter-spacing: 0.02em; padding: 0.08rem 0.45rem; border-radius: 999px; white-space: nowrap; border: 1px solid currentColor; vertical-align: 0.08em; }
+.b.http { color: var(--http); background: var(--http-bg); }
+.b.local { color: var(--local); background: var(--local-bg); }
+.b.disk { color: var(--disk); background: var(--disk-bg); }
+.b.yours { color: var(--yours); background: var(--yours-bg); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; margin: 1rem 0; }
+.cards.wide { grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 0.9rem 1.1rem; min-width: 0; }
+.card h3, .card h4 { margin: 0 0 0.4rem; font-size: 1.02rem; }
+.card p, .card ul { margin: 0.4rem 0; font-size: 0.95rem; }
+.card ul { padding-left: 1.1rem; }
+.card pre { font-size: 0.8rem; }
+.card.http { border-top: 4px solid var(--http); }
+.card.local { border-top: 4px solid var(--local); }
+.card.yours { border-top: 4px solid var(--yours); }
+.card.disk { border-top: 4px solid var(--disk); }
+.card.bad { border-top: 4px solid var(--bad); }
+figure { margin: 1rem 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 0.6rem; overflow-x: auto; }
+figure svg { display: block; width: 100%; height: auto; }
+figure svg.seq { min-width: 640px; max-width: 900px; margin: 0 auto; }
+figure svg.chain, figure svg.states { min-width: 620px; }
+figcaption { font-size: 0.88rem; color: var(--muted); padding: 0.4rem 0.4rem 0.1rem; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+@media (min-width: 1100px) { .split { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); align-items: start; } }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+.tablewrap { overflow-x: auto; margin: 0.6rem 0 1rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--panel); }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule); }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 650; background: var(--code-bg); }
+td:first-child { white-space: nowrap; }
+td code { white-space: nowrap; }
+td.wrap code { white-space: normal; }
+.ref-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.6rem 0; font-size: 0.9rem; }
+.ref-controls button { font: inherit; font-size: 0.88rem; padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; }
+.ref-controls button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+tr[hidden] { display: none; }
+.cls { margin: 1.6rem 0 0.2rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; }
+.cls h3 { margin: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 1.08rem; }
+.cls .how { color: var(--muted); font-size: 0.9rem; }
+.callout { border-left: 4px solid var(--disk); background: var(--disk-bg); padding: 0.6rem 0.9rem; border-radius: 0 8px 8px 0; max-width: 50rem; }
+.callout.http { border-color: var(--http); background: var(--http-bg); }
+.callout.yours { border-color: var(--yours); background: var(--yours-bg); }
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 0.8rem 0; }
+.steps li { counter-increment: s; position: relative; padding: 0.15rem 0 0.55rem 2.2rem; }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: 0.1rem; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 0.8rem; font-weight: 700; display: grid; place-items: center; }
+.path { display: flex; flex-wrap: wrap; gap: 0.25rem; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.82rem; margin: 0.6rem 0; }
+.path span { background: var(--disk-bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 0.2rem 0.45rem; }
+.path span small { display: block; color: var(--muted); font-family: system-ui, sans-serif; font-size: 0.72rem; }
+footer { border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1rem; font-size: 0.88rem; color: var(--muted); }
+
+/* SVG */
+svg text { fill: var(--ink); font-size: 12.5px; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+svg text.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+svg text.sm { font-size: 11px; }
+svg text.lbl { fill: var(--ink); }
+svg .head-txt, svg .obj-name, svg .br-txt { font-weight: 650; font-size: 14px; }
+svg .frame-lbl { fill: var(--muted); font-size: 12px; font-weight: 600; }
+svg .life { stroke: var(--rule); stroke-width: 2; stroke-dasharray: 2 5; }
+svg .head-http, svg .note-http { fill: var(--http-bg); stroke: var(--http); }
+svg .head-local, svg .note-local { fill: var(--local-bg); stroke: var(--local); }
+svg .head-yours, svg .note-yours { fill: var(--yours-bg); stroke: var(--yours); }
+svg .note-disk { fill: var(--disk-bg); stroke: var(--disk); }
+svg .ln-http { stroke: var(--http); stroke-width: 1.8; fill: none; }
+svg .ln-local { stroke: var(--local); stroke-width: 1.8; fill: none; }
+svg .ah-http { fill: var(--http); }
+svg .ah-local { fill: var(--local); }
+svg .ah-disk { fill: var(--disk); }
+svg .ah-yours { fill: var(--yours); }
+svg .frame { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 6 4; }
+svg .obj { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+svg .br-http { fill: none; stroke: var(--http); stroke-width: 2; }
+svg .br-local { fill: none; stroke: var(--local); stroke-width: 2; }
+svg .band { fill: var(--http-bg); stroke: var(--http); }
+svg .st-idle { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; }
+svg .st-warn { fill: var(--disk-bg); stroke: var(--disk); stroke-width: 1.5; }
+svg .st-ok { fill: var(--local-bg); stroke: var(--local); stroke-width: 1.5; }
+svg .st-bad { fill: var(--bad-bg); stroke: var(--bad); stroke-width: 1.5; }
+svg .unconf { fill: none; stroke: var(--disk); stroke-width: 1.5; stroke-dasharray: 6 4; }
+@media print {
+  nav.toc, .ref-controls, .skip { display: none; }
+  .wrap { display: block; }
+  figure, .tablewrap { overflow: visible; break-inside: avoid; }
+  figure svg.seq, figure svg.chain, figure svg.states { min-width: 0; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><marker id="ah-http" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-http" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ah-local" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-local" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ah-disk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-disk" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ah-yours" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-yours" d="M0 0 L10 5 L0 10 z"/></marker></defs></svg>
+<header class="top">
+  <h1>dbstim API map</h1>
+  <p class="lede">The public interface of the <code>dbstim</code> Python package as it is today: what each object is,
+    which calls go over the network, which stay on your computer, and what happens when a session is interrupted.</p>
+  <p class="meta">Describes dbstim <strong>0.5.0</strong> (<code>src/dbstim/</code>). Single self-contained file: no
+    network, server or install needed to read it. A text version with Mermaid diagrams is
+    <a href="api-interface.md">api-interface.md</a>.</p>
+  <ul class="legend" aria-label="Badge legend">
+    <li><span class="b http">HTTP</span> sends a request to dbstimuli.com</li>
+    <li><span class="b local">local</span> runs in your Python process, no request</li>
+    <li><span class="b disk">disk</span> reads or writes the media cache</li>
+    <li><span class="b yours">yours</span> your code; dbstim is not involved</li>
+  </ul>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#model"><span class="n">1</span>Mental model</a></li>
+    <li><a href="#download"><span class="n">2</span>Create, select, download</a></li>
+    <li><a href="#tracked"><span class="n">3</span>Tracked presentation</a></li>
+    <li><a href="#outcomes"><span class="n">4</span>Outcomes</a></li>
+    <li><a href="#recovery"><span class="n">5</span>Recovery</a></li>
+    <li><a href="#media"><span class="n">6</span>Media and cache</a></li>
+    <li><a href="#reference"><span class="n">7</span>Reference</a></li>
+    <li><a href="#boundaries"><span class="n">8</span>Boundaries</a></li>
+  </ol>
+</nav>
+
+<main id="main">
+
+<section id="model" aria-labelledby="model-h">
+  <h2 id="model-h"><span class="n">1</span>Mental model</h2>
+  <p>Every object is reached from the one before it. A <code>Client</code> creates or opens an
+    <code>Experiment</code>; publishing it freezes which trials each subject sees, in which session and run. Presentation progress is stored on the server, never in local files.</p>
+  <figure>
+    <svg class="chain" viewBox="0 0 960 250" role="img" aria-labelledby="chain-t chain-d"><title id="chain-t">How you reach each object</title><desc id="chain-d">Client leads to Experiment, Subject, Session, Run and Trial. Client and Experiment are the design you create and publish. Subject through Trial are the frozen assignment. Session progress is stored on the server.</desc><rect class="obj" x="20" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="90.0" y="60" text-anchor="middle">Client</text><text class="lbl mono sm" x="90.0" y="82" text-anchor="middle">dbstim.connect()</text><rect class="obj" x="176" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="246.0" y="60" text-anchor="middle">Experiment</text><text class="lbl mono sm" x="246.0" y="82" text-anchor="middle">create_experiment()</text><text class="lbl mono sm" x="246.0" y="97" text-anchor="middle">or experiment(name)</text><line class="ln-local" x1="161" y1="73.0" x2="173" y2="73.0" marker-end="url(#ah-local)"/><rect class="obj" x="332" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="402.0" y="60" text-anchor="middle">Subject</text><text class="lbl mono sm" x="402.0" y="82" text-anchor="middle">experiment.subjects</text><text class="lbl mono sm" x="402.0" y="97" text-anchor="middle">or subject(id)</text><line class="ln-local" x1="317" y1="73.0" x2="329" y2="73.0" marker-end="url(#ah-local)"/><rect class="obj" x="488" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="558.0" y="60" text-anchor="middle">Session</text><text class="lbl mono sm" x="558.0" y="82" text-anchor="middle">subject.sessions[i]</text><text class="lbl mono sm" x="558.0" y="97" text-anchor="middle">or session(id)</text><line class="ln-local" x1="473" y1="73.0" x2="485" y2="73.0" marker-end="url(#ah-local)"/><rect class="obj" x="644" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="714.0" y="60" text-anchor="middle">Run</text><text class="lbl mono sm" x="714.0" y="82" text-anchor="middle">session.next_run()</text><text class="lbl mono sm" x="714.0" y="97" text-anchor="middle">or run(id)</text><line class="ln-local" x1="629" y1="73.0" x2="641" y2="73.0" marker-end="url(#ah-local)"/><rect class="obj" x="800" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="870.0" y="60" text-anchor="middle">Trial</text><text class="lbl mono sm" x="870.0" y="82" text-anchor="middle">run.next_trial()</text><text class="lbl mono sm" x="870.0" y="97" text-anchor="middle">or run.trials</text><line class="ln-local" x1="785" y1="73.0" x2="797" y2="73.0" marker-end="url(#ah-local)"/><path class="br-http" d="M20 126 v10 H316 v-10"/><text class="br-txt" x="168.0" y="156" text-anchor="middle">Design</text><text class="lbl" x="168.0" y="173" text-anchor="middle">filters, counts, seed; publish() freezes it</text><path class="br-local" d="M332 126 v10 H940 v-10"/><text class="br-txt" x="636.0" y="156" text-anchor="middle">Assignment</text><text class="lbl" x="636.0" y="173" text-anchor="middle">frozen at publish; each subject’s manifest is SHA-256 verified</text><rect class="band" x="332" y="196" width="588" height="38" rx="8"/><text class="lbl" x="636" y="220" text-anchor="middle">Progress lives on the server: start() · record(trial, status) · finish()</text></svg>
+    <figcaption>The six objects, how you get each one, and which part of the system owns it.</figcaption>
+  </figure>
+  <div class="cards">
+    <div class="card http">
+      <h3>dbstimuli.com owns</h3>
+      <ul>
+        <li>the video catalog and filterable metrics</li>
+        <li>experiments, publication and each subject's manifest</li>
+        <li>presentation progress, results and the session claim</li>
+      </ul>
+    </div>
+    <div class="card local">
+      <h3>dbstim does</h3>
+      <ul>
+        <li>validates arguments before sending them</li>
+        <li>verifies manifests and every video by SHA-256</li>
+        <li>keeps a per-user media cache</li>
+        <li>sends start, record and finish, resending safely</li>
+      </ul>
+    </div>
+    <div class="card yours">
+      <h3>Your program owns</h3>
+      <ul>
+        <li>rendering: PGL, PsychoPy or any player</li>
+        <li>timing, responses and what goes in a result</li>
+        <li>saying whether a trial was shown to the end</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="download" aria-labelledby="download-h">
+  <h2 id="download-h"><span class="n">2</span>Shortest journey: create, select, download</h2>
+  <p>This is the whole path from nothing to verified video files. It records <strong>no</strong> presentation
+    progress, so it is safe to run in a notebook ahead of time.</p>
+  <div class="split">
+<pre><code>import dbstim
+from dbstim import MetricFilter
+
+client = dbstim.connect()   # asks for your password
+experiment = client.create_experiment(
+    "Memory demo", subjects=5, trials_per_run=24,
+    filters=[MetricFilter("duration_seconds", "&gt;=", 10)],
+)
+experiment.publish()        # freeze assignments
+session = experiment.subjects[0].sessions[0]
+folder = session.download() # verified .mp4 files</code></pre>
+      <ol class="steps">
+        <li><code>connect()</code> asks for credentials, then signs in <span class="b http">HTTP</span>. The cookie lives
+          only in memory; <code>client.close()</code> forgets it.</li>
+        <li><code>create_experiment()</code> checks every argument locally <span class="b local">local</span>, then
+          samples videos and saves a <em>draft</em> <span class="b http">HTTP</span>. To reopen one, use
+          <code>client.experiment("Memory demo")</code> <span class="b http">HTTP</span> or
+          <code>client.experiment(id="…")</code> <span class="b local">local</span>.</li>
+        <li><code>publish()</code> freezes subjects, sessions, runs and trial order <span class="b http">HTTP</span>.
+          Publishing again changes nothing.</li>
+        <li><code>experiment.subjects</code> fetches the published list once <span class="b http">HTTP</span>;
+          <code>subject.sessions</code> needs no request <span class="b local">local</span>.</li>
+        <li><code>session.download()</code> fetches each video not yet verified <span class="b http">HTTP</span>
+          <span class="b disk">disk</span> and returns the folder's <code>Path</code>. A second call downloads nothing.</li>
+      </ol>
+  </div>
+    <figure>
+    <svg class="seq" id="seq-download" viewBox="0 0 820 1114" role="img" aria-labelledby="seq-download-t seq-download-d"><title id="seq-download-t">Create, select and download: call sequence</title><desc id="seq-download-d">Your code calls connect, create_experiment, publish, subjects and download. Each step that reaches dbstimuli.com is an HTTP request; choosing a session is local. Download writes verified files to the per-user cache and records no progress.</desc><line class="life" x1="130" y1="56" x2="130" y2="1106"/><rect class="head-yours" x="25" y="16" width="210" height="40" rx="8"/><text class="head-txt" x="130" y="41" text-anchor="middle">Your code</text><line class="life" x1="410" y1="56" x2="410" y2="1106"/><rect class="head-local" x="305" y="16" width="210" height="40" rx="8"/><text class="head-txt" x="410" y="41" text-anchor="middle">dbstim (in your process)</text><line class="life" x1="690" y1="56" x2="690" y2="1106"/><rect class="head-http" x="585" y="16" width="210" height="40" rx="8"/><text class="head-txt" x="690" y="41" text-anchor="middle">dbstimuli.com</text><rect class="frame" x="18" y="834" width="784" height="136" rx="8"/><text class="frame-lbl" x="28" y="850">for each trial without a verified file</text><line class="ln-local" x1="130" y1="92" x2="404" y2="92" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="85" text-anchor="middle">dbstim.connect()</text><line class="ln-http" x1="410" y1="132" x2="684" y2="132" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="125" text-anchor="middle">POST /api/auth/login</text><line class="ln-http" x1="690" y1="172" x2="416" y2="172" stroke-dasharray="5 4" marker-end="url(#ah-http)"/><text class="lbl" x="550.0" y="165" text-anchor="middle">cookie + CSRF token, kept in memory only</text><line class="ln-local" x1="130" y1="212" x2="404" y2="212" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="205" text-anchor="middle">client.create_experiment(...)</text><rect class="note-local" x="305.605" y="238" width="208.79000000000002" height="44" rx="6"/><text class="lbl" x="410" y="254" text-anchor="middle">checks counts, fraction, seed</text><text class="lbl" x="410" y="270" text-anchor="middle">before any request</text><line class="ln-http" x1="410" y1="314" x2="684" y2="314" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="307" text-anchor="middle">POST /api/v1/media/query</text><line class="ln-http" x1="410" y1="354" x2="684" y2="354" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="347" text-anchor="middle">POST /api/v1/experiments</text><line class="ln-local" x1="410" y1="394" x2="136" y2="394" stroke-dasharray="5 4" marker-end="url(#ah-local)"/><text class="lbl" x="270.0" y="387" text-anchor="middle">Experiment (a draft)</text><line class="ln-local" x1="130" y1="434" x2="404" y2="434" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="427" text-anchor="middle">experiment.publish()</text><line class="ln-http" x1="410" y1="474" x2="684" y2="474" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="467" text-anchor="middle">POST /api/v1/experiments/{id}/publish</text><rect class="note-http" x="592.115" y="500" width="195.77" height="44" rx="6"/><text class="lbl" x="690" y="516" text-anchor="middle">freezes subjects, sessions,</text><text class="lbl" x="690" y="532" text-anchor="middle">runs and trial order</text><line class="ln-local" x1="130" y1="576" x2="404" y2="576" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="569" text-anchor="middle">experiment.subjects[0]</text><line class="ln-http" x1="410" y1="616" x2="684" y2="616" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="609" text-anchor="middle">GET /api/v1/experiments/{id}</text><rect class="note-local" x="302.35" y="642" width="215.3" height="44" rx="6"/><text class="lbl" x="410" y="658" text-anchor="middle">checks each manifest SHA-256;</text><text class="lbl" x="410" y="674" text-anchor="middle">caches the tuple on the object</text><line class="ln-local" x1="130" y1="718" x2="404" y2="718" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="711" text-anchor="middle">subject.sessions[0]</text><rect class="note-local" x="367.45" y="744" width="85.10000000000001" height="28" rx="6"/><text class="lbl" x="410" y="760" text-anchor="middle">no request</text><line class="ln-local" x1="130" y1="804" x2="404" y2="804" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="797" text-anchor="middle">session.download()</text><line class="ln-http" x1="410" y1="880" x2="684" y2="880" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="873" text-anchor="middle">GET …/trials/{trial}/media</text><rect class="note-disk" x="299.095" y="906" width="221.81" height="44" rx="6"/><text class="lbl" x="410" y="922" text-anchor="middle">checks size + SHA-256, then</text><text class="lbl" x="410" y="938" text-anchor="middle">hard-links into ~/.cache/dbstim</text><line class="ln-local" x1="410" y1="1002" x2="136" y2="1002" stroke-dasharray="5 4" marker-end="url(#ah-local)"/><text class="lbl" x="270.0" y="995" text-anchor="middle">Path of the session folder</text><rect class="note-local" x="40" y="1028" width="740" height="44" rx="6"/><text class="lbl" x="410.0" y="1044" text-anchor="middle">Nothing above records presentation progress: previewing and downloading are safe</text><text class="lbl" x="410.0" y="1060" text-anchor="middle">in a notebook before the participant arrives.</text></svg>
+    <figcaption>Create, select and download. Paths are abbreviated: <code>…</code> stands for
+      <code>/api/v1/experiments/{id}/subjects/{subject}</code>.</figcaption>
+  </figure>
+  <p class="callout">The files are named by trial (<code>trial-000001.mp4</code>) with a <code>.json</code> receipt
+    beside each. To learn which trial is which video, role or segment, use the <code>Trial</code> objects from
+    <code>run.trials</code>; the folder holds no manifest of its own.</p>
+</section>
+
+<section id="tracked" aria-labelledby="tracked-h">
+  <h2 id="tracked-h"><span class="n">3</span>Tracked presentation</h2>
+  <p>A separate lifecycle, used inside your presentation program. Each trial is reported twice: once when it
+    starts and once with its ending. The server, not dbstim, decides what comes next.</p>
+  <div class="split">
+<pre><code>with session:  # start() now, finish() at the end
+    while (run := session.next_run()) is not None:
+        while (trial := run.next_trial()) is not None:
+            path = run.media(trial)    # verified file
+            run.record(trial, "started")
+            result = present(path)     # yours
+            run.record(trial, "completed", result=result)</code></pre>
+      <ol class="steps">
+        <li><code>with session:</code> calls <code>start()</code> <span class="b http">HTTP</span>, claiming the session
+          for this <code>Session</code> object.</li>
+        <li><code>next_run()</code> and <code>next_trial()</code> each read progress from the server
+          <span class="b http">HTTP</span>. They return <code>None</code> when nothing is left.</li>
+        <li><code>run.media(trial)</code> returns a verified file <span class="b disk">disk</span>. After
+          <code>download()</code> it makes no request; otherwise it downloads that one video first.</li>
+        <li><code>record(trial, "started")</code> <span class="b http">HTTP</span> must come before you present.</li>
+        <li><code>present(path)</code> is entirely <span class="b yours">yours</span>: dbstim never opens a window,
+          plays audio or times frames.</li>
+        <li><code>record(trial, "completed", result=…)</code> <span class="b http">HTTP</span>, or
+          <code>"abandoned"</code> if it was not shown to the end.</li>
+        <li>Leaving the block reads progress, then calls <code>finish(status)</code> <span class="b http">HTTP</span>.</li>
+      </ol>
+  </div>
+    <figure>
+    <svg class="seq" id="seq-tracked" viewBox="0 0 820 1124" role="img" aria-labelledby="seq-tracked-t seq-tracked-d"><title id="seq-tracked-t">Tracked presentation: call sequence</title><desc id="seq-tracked-d">Entering with session sends start. For each trial, next_trial reads server progress, media returns a verified local path, record started is sent, your code presents the video, and record completed or abandoned is sent. Leaving the block reads progress and sends finish with completed, interrupted or failed.</desc><line class="life" x1="130" y1="56" x2="130" y2="1116"/><rect class="head-yours" x="25" y="16" width="210" height="40" rx="8"/><text class="head-txt" x="130" y="41" text-anchor="middle">Your code</text><line class="life" x1="410" y1="56" x2="410" y2="1116"/><rect class="head-local" x="305" y="16" width="210" height="40" rx="8"/><text class="head-txt" x="410" y="41" text-anchor="middle">dbstim (in your process)</text><line class="life" x1="690" y1="56" x2="690" y2="1116"/><rect class="head-http" x="585" y="16" width="210" height="40" rx="8"/><text class="head-txt" x="690" y="41" text-anchor="middle">dbstimuli.com</text><rect class="frame" x="18" y="224" width="784" height="716" rx="8"/><text class="frame-lbl" x="28" y="240">loop · while session.next_run() returns a Run</text><rect class="frame" x="28" y="340" width="764" height="580" rx="8"/><text class="frame-lbl" x="38" y="356">loop · while run.next_trial() returns a Trial</text><line class="ln-local" x1="130" y1="92" x2="404" y2="92" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="85" text-anchor="middle">with session:</text><line class="ln-http" x1="410" y1="132" x2="684" y2="132" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="125" text-anchor="middle">POST …/sessions/{id}/start</text><rect class="note-http" x="579.095" y="158" width="221.81" height="44" rx="6"/><text class="lbl" x="690" y="174" text-anchor="middle">claims the session for this</text><text class="lbl" x="690" y="190" text-anchor="middle">object; 409 if another holds it</text><line class="ln-local" x1="130" y1="270" x2="404" y2="270" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="263" text-anchor="middle">session.next_run()</text><line class="ln-http" x1="410" y1="310" x2="684" y2="310" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="303" text-anchor="middle">GET …/sessions/{id}  (progress)</text><line class="ln-local" x1="130" y1="386" x2="404" y2="386" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="379" text-anchor="middle">run.next_trial()</text><line class="ln-http" x1="410" y1="426" x2="684" y2="426" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="419" text-anchor="middle">GET …/sessions/{id}  (progress)</text><line class="ln-local" x1="410" y1="466" x2="136" y2="466" stroke-dasharray="5 4" marker-end="url(#ah-local)"/><text class="lbl" x="270.0" y="459" text-anchor="middle">Trial, None, or ApiError if unconfirmed</text><line class="ln-local" x1="130" y1="506" x2="404" y2="506" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="499" text-anchor="middle">run.media(trial)</text><rect class="note-disk" x="299.095" y="532" width="221.81" height="44" rx="6"/><text class="lbl" x="410" y="548" text-anchor="middle">cache hit: re-hash, no request</text><text class="lbl" x="410" y="564" text-anchor="middle">miss: GET …/media, verify, save</text><line class="ln-local" x1="410" y1="608" x2="136" y2="608" stroke-dasharray="5 4" marker-end="url(#ah-local)"/><text class="lbl" x="270.0" y="601" text-anchor="middle">Path to a verified .mp4</text><line class="ln-local" x1="130" y1="648" x2="404" y2="648" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="641" text-anchor="middle">run.record(trial, &quot;started&quot;)</text><line class="ln-http" x1="410" y1="688" x2="684" y2="688" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="681" text-anchor="middle">POST …/sessions/{id}/trials</text><rect class="note-yours" x="45.13499999999999" y="714" width="169.73000000000002" height="44" rx="6"/><text class="lbl" x="130" y="730" text-anchor="middle">present(path) → result</text><text class="lbl" x="130" y="746" text-anchor="middle">PGL, PsychoPy, …: yours</text><line class="ln-local" x1="130" y1="790" x2="404" y2="790" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="783" text-anchor="middle">run.record(trial, &quot;completed&quot;, …)</text><rect class="note-local" x="315.37" y="816" width="189.26000000000002" height="44" rx="6"/><text class="lbl" x="410" y="832" text-anchor="middle">result must be plain JSON;</text><text class="lbl" x="410" y="848" text-anchor="middle">checked before sending</text><line class="ln-http" x1="410" y1="892" x2="684" y2="892" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="885" text-anchor="middle">POST …/sessions/{id}/trials</text><line class="ln-local" x1="130" y1="972" x2="404" y2="972" marker-end="url(#ah-local)"/><text class="lbl mono" x="270.0" y="965" text-anchor="middle">leave the with block</text><line class="ln-http" x1="410" y1="1012" x2="684" y2="1012" marker-end="url(#ah-http)"/><text class="lbl mono" x="550.0" y="1005" text-anchor="middle">GET progress, then POST …/finish</text><rect class="note-http" x="572.585" y="1038" width="234.83" height="44" rx="6"/><text class="lbl" x="690" y="1054" text-anchor="middle">completed · interrupted · failed;</text><text class="lbl" x="690" y="1070" text-anchor="middle">releases the claim</text></svg>
+    <figcaption>Tracked presentation; <code>…</code> as above. Every <span class="b http">HTTP</span> command carries a request ID, so a
+      resend is never recorded twice.</figcaption>
+  </figure>
+</section>
+
+<section id="outcomes" aria-labelledby="outcomes-h">
+  <h2 id="outcomes-h"><span class="n">4</span>Trial and session outcomes</h2>
+  <figure>
+    <svg class="states" viewBox="0 0 880 250" role="img" aria-labelledby="st-t st-d"><title id="st-t">Trial outcomes</title><desc id="st-d">A trial that is not presented becomes started when you record started. From started it becomes completed or abandoned, both final. While started with no ending it is unconfirmed: session.unconfirmed lists it and run.next_trial raises in every run.</desc><rect class="unconf" x="276" y="20" width="208" height="190" rx="14"/><text class="frame-lbl" x="380" y="42" text-anchor="middle">unconfirmed: no ending yet</text><rect class="st-idle" x="20" y="86" width="190" height="58" rx="29"/><text class="obj-name" x="115.0" y="111" text-anchor="middle">not presented</text><text class="lbl" x="115.0" y="130" text-anchor="middle">next_trial() can return it</text><rect class="st-warn" x="290" y="86" width="180" height="58" rx="29"/><text class="obj-name" x="380.0" y="111" text-anchor="middle">started</text><text class="lbl" x="380.0" y="130" text-anchor="middle">session.unconfirmed</text><rect class="st-ok" x="620" y="24" width="240" height="58" rx="29"/><text class="obj-name" x="740.0" y="49" text-anchor="middle">completed</text><text class="lbl" x="740.0" y="68" text-anchor="middle">final · shown to the end</text><rect class="st-bad" x="620" y="148" width="240" height="58" rx="29"/><text class="obj-name" x="740.0" y="173" text-anchor="middle">abandoned</text><text class="lbl" x="740.0" y="192" text-anchor="middle">final · session.abandoned</text><line class="ln-http" x1="210" y1="115" x2="284" y2="115" marker-end="url(#ah-http)"/><text class="lbl mono sm" x="241" y="106" text-anchor="middle">"started"</text><path class="ln-http" d="M470 104 C540 80 560 53 614 53" fill="none" marker-end="url(#ah-http)"/><text class="lbl mono sm" x="548" y="44" text-anchor="middle">"completed"</text><path class="ln-http" d="M470 128 C540 150 560 177 614 177" fill="none" marker-end="url(#ah-http)"/><text class="lbl mono sm" x="548" y="204" text-anchor="middle">"abandoned"</text><text class="lbl" x="380" y="176" text-anchor="middle">run.next_trial() raises in</text><text class="lbl" x="380" y="192" text-anchor="middle">every run of the session</text><text class="lbl" x="440" y="238" text-anchor="middle">Arrows are session.record(trial, status) or run.record(...): one HTTP POST each. Neither ending is ever presented again.</text></svg>
+    <figcaption>A trial has one start and at most one ending. A start with no ending blocks the whole session
+      until you record one.</figcaption>
+  </figure>
+  <h3>How <code>with session:</code> finishes</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th scope="col">The block ends because…</th><th scope="col">Status sent to <code>finish()</code></th><th scope="col">Then</th></tr></thead>
+    <tbody>
+      <tr><td>it ran to the end and <strong>every</strong> trial is <code>completed</code></td><td><code>"completed"</code></td><td>session done</td></tr>
+      <tr><td>it ran to the end but a trial is abandoned or unfinished</td><td><code>"interrupted"</code></td><td>progress kept; resume later</td></tr>
+      <tr><td>Ctrl-C (<code>KeyboardInterrupt</code>) or another non-<code>Exception</code></td><td><code>"interrupted"</code></td><td>the interrupt is re-raised</td></tr>
+      <tr><td>an exception was raised inside it</td><td><code>"failed"</code></td><td>the original exception is re-raised; a finish failure is added as a note</td></tr>
+    </tbody>
+  </table></div>
+  <p>Without a <code>with</code> block, call <code>session.start()</code> and <code>session.finish(status)</code>
+    yourself; <code>status</code> is <code>"completed"</code>, <code>"interrupted"</code> or <code>"failed"</code>.
+    <code>session.results</code> lists the results you sent, each with its status; <code>session.abandoned</code>
+    lists abandoned trials, with or without a result.</p>
+</section>
+
+<section id="recovery" aria-labelledby="recovery-h">
+  <h2 id="recovery-h"><span class="n">5</span>Recovery</h2>
+  <p>Recovery always starts from what the server recorded. Nothing is replayed automatically.</p>
+  <div class="cards wide">
+    <div class="card bad">
+      <h3>Stopped mid-trial</h3>
+      <p><code>run.next_trial()</code> raises <code>ApiError</code> naming the trial, run and position.
+        Decide what really happened, record it, then continue:</p>
+<pre><code>with session:
+    for trial in session.unconfirmed:
+        session.record(trial, "abandoned")
+    while (run := session.next_run()) is not None:
+        ...  # the usual loop</code></pre>
+      <p>Record <code>"completed"</code> only if the participant saw it to the end.</p>
+    </div>
+    <div class="card http">
+      <h3>Dropped connection</h3>
+      <p><code>start</code>, <code>finish</code> and <code>record</code> are resent unchanged up to three times
+        (after 0.5, 1 and 2 s) on a connection failure or HTTP 500, 502, 503, 504. A 4xx answer is never resent.</p>
+      <p>If every attempt fails, that call stays <em>pending</em>: progress reads and other commands raise until you
+        repeat the same call on the same <code>Session</code> object.</p>
+    </div>
+    <div class="card yours">
+      <h3>Another presenter owns this session</h3>
+      <p><code>start()</code> fails with HTTP 409 while another program holds the claim. Once you are sure it has
+        stopped:</p>
+<pre><code>session.start(takeover=True)
+with session:
+    ...</code></pre>
+      <p>Never take over a session another computer is still presenting.</p>
+    </div>
+    <div class="card disk">
+      <h3>Local media problems</h3>
+      <p>A cached file whose size, hash or identity no longer matches its receipt is refused, not replaced.
+        Symlinks are refused. Disk errors are raised as <code>OSError</code>, not as connection errors; drives that
+        cannot hard-link (exFAT, FAT) need <code>session.download(directory)</code> on another disk.</p>
+    </div>
+  </div>
+  <p>Signed out (a later HTTP 401)? Call <code>dbstim.connect()</code> again. Recording <code>"abandoned"</code>
+    needs a server with abandoned outcomes; an older server refuses it and the trial stays unconfirmed. More detail:
+    <a href="recovery.md">Recovering a session</a>.</p>
+</section>
+
+<section id="media" aria-labelledby="media-h">
+  <h2 id="media-h"><span class="n">6</span>Media and cache</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th scope="col">Call</th><th scope="col">Returns</th><th scope="col">Network</th><th scope="col">Use it when</th></tr></thead>
+    <tbody>
+      <tr><td><code>run.media(trial)</code><br><small>mode <code>"cache"</code>, the default</small></td><td><code>Path</code></td><td><span class="b disk">disk</span> then <span class="b http">HTTP</span> only on a miss</td><td>the usual loop</td></tr>
+      <tr><td><code>run.media(trial, mode="local")</code></td><td><code>Path</code></td><td><span class="b disk">disk</span> only; <code>ApiError</code> if not downloaded</td><td>you require everything downloaded in advance</td></tr>
+      <tr><td><code>run.media(trial, mode="remote")</code></td><td><code>str</code> URL</td><td><span class="b http">HTTP</span>; nothing saved</td><td>streaming; the link is short-lived (five minutes, set by the server)</td></tr>
+      <tr><td><code>session.download(directory=None)</code></td><td><code>Path</code></td><td><span class="b http">HTTP</span> per missing video, <span class="b disk">disk</span></td><td>before the participant arrives</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Where files go</h3>
+  <p>By default every program shares one per-user cache, so a notebook's download serves a presentation program
+    started from any folder:</p>
+  <div class="path" aria-label="Cache path segments">
+    <span>$XDG_CACHE_HOME/dbstim<small>or ~/.cache/dbstim</small></span>
+    <span>/{origin}<small>server URL hash</small></span>
+    <span>/{experiment}</span><span>/{subject}</span>
+    <span>/{manifest}<small>SHA-256</small></span>
+    <span>/{session}</span>
+    <span>/trial-000001.mp4 + .json<small>video + receipt</small></span>
+  </div>
+  <ul>
+    <li><strong>Verified on arrival:</strong> type <code>video/mp4</code>, declared size (at most 4 GiB) and the
+      server's SHA-256, written to a temporary file and hard-linked into place so no file is ever overwritten.</li>
+    <li><strong>Verified on every use:</strong> <code>run.media()</code> re-hashes a cached file against its receipt
+      before returning it, so it costs a read of the file even with no request.</li>
+    <li><strong>Another folder:</strong> <code>session.download(directory)</code> or
+      <code>subject.session(id, directory=…)</code>. A later program must pass the same directory to find those files.</li>
+    <li>Deleting files never changes server progress, and downloading never records any.</li>
+  </ul>
+</section>
+
+<section id="reference" aria-labelledby="reference-h">
+  <h2 id="reference-h"><span class="n">7</span>Reference</h2>
+  <p>Every public name exported by <code>import dbstim</code>. Properties marked <em>reads server</em> make a request
+    on each access.</p>
+  <div class="ref-controls" id="ref-controls" hidden>
+    <span>Show:</span>
+    <button type="button" data-filter="all" aria-pressed="true">All members</button>
+    <button type="button" data-filter="http" aria-pressed="false">Sends HTTP</button>
+    <button type="button" data-filter="local" aria-pressed="false">No request</button>
+  </div>
+
+  <div class="cls"><h3 id="ref-connect">connect · Client</h3><span class="how">from <code>dbstim.connect()</code></span></div>
+  <div class="tablewrap"><table class="ref">
+    <thead><tr><th scope="col">Member</th><th scope="col">Returns</th><th scope="col">Network</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr data-io="http"><td><code>dbstim.connect(username=None, *, url="https://dbstimuli.com", timeout=120)</code></td><td><code>Client</code></td><td><span class="b http">HTTP</span></td><td>Prompts for the username if omitted and the password without echo.</td></tr>
+      <tr data-io="http"><td><code>Client(username, password, *, url=…, timeout=120)</code></td><td><code>Client</code></td><td><span class="b http">HTTP</span></td><td>Signs in directly. HTTPS only (HTTP for localhost). No redirects or system proxies.</td></tr>
+      <tr data-io="local"><td><code>client.username</code>, <code>client.url</code></td><td><code>str</code></td><td><span class="b local">local</span></td><td>Signed-in account and server origin.</td></tr>
+      <tr data-io="http"><td><code>client.metrics()</code></td><td><code>list[Metric]</code></td><td><span class="b http">HTTP</span></td><td>What <code>MetricFilter</code> can filter on.</td></tr>
+      <tr data-io="http"><td><code>client.experiments()</code></td><td><code>list[dict]</code></td><td><span class="b http">HTTP</span></td><td>Your experiments as raw rows, fetched 100 at a time.</td></tr>
+      <tr data-io="http"><td><code>client.experiment(name)</code><br><code>client.experiment(id=…)</code></td><td><code>Experiment</code></td><td><span class="b http">HTTP</span> by name<br><span class="b local">local</span> by id</td><td>Exact name; prefers the latest published revision. Repeated names raise <code>ValueError</code> listing the ids.</td></tr>
+      <tr data-io="http"><td><code>client.create_experiment(name, *, subjects, trials_per_run, …)</code></td><td><code>Experiment</code></td><td><span class="b http">HTTP</span></td><td>Saves a draft. Options below. Warns when <code>shared_fraction</code> rounds down.</td></tr>
+      <tr data-io="local"><td><code>client.close()</code>, <code>with client:</code></td><td><code>None</code></td><td><span class="b local">local</span></td><td>Forgets the session cookie.</td></tr>
+    </tbody>
+  </table></div>
+
+  <details>
+    <summary><code>create_experiment</code> options</summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th scope="col">Keyword</th><th scope="col">Default</th><th scope="col">Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>subjects</code></td><td>required</td><td>participants, 1–100</td></tr>
+        <tr><td><code>trials_per_run</code></td><td>required</td><td>presentations per run, counting foils and repeats</td></tr>
+        <tr><td><code>sessions_per_subject</code>, <code>runs_per_session</code></td><td><code>1</code>, <code>1</code></td><td>structure; at most 50,000 presentations in total</td></tr>
+        <tr><td><code>foils_per_run</code>, <code>repeats_per_run</code></td><td><code>0</code>, <code>0</code></td><td>second halves and second showings; each at most the run's parent videos</td></tr>
+        <tr><td><code>shared_fraction</code></td><td><code>0</code></td><td>share of parent videos every subject sees, 0–1, rounded down</td></tr>
+        <tr><td><code>seed</code></td><td><code>"0"</code></td><td>nonempty string or integer</td></tr>
+        <tr><td><code>sampling</code></td><td><code>"random"</code></td><td><code>"random"</code>, <code>"balanced"</code> or <code>"unique"</code> channel sampling</td></tr>
+        <tr><td><code>filters</code></td><td><code>()</code></td><td>sequence of <code>MetricFilter</code></td></tr>
+        <tr><td><code>content</code>, <code>corpus</code></td><td><code>""</code>, <code>"both"</code></td><td>keyword search in <code>"captions"</code>, <code>"transcripts"</code> or <code>"both"</code></td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <div class="cls"><h3 id="ref-experiment">Experiment</h3><span class="how">from <code>create_experiment()</code> or <code>experiment()</code></span></div>
+  <div class="tablewrap"><table class="ref">
+    <thead><tr><th scope="col">Member</th><th scope="col">Returns</th><th scope="col">Network</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr data-io="local"><td><code>experiment.id</code></td><td><code>str</code></td><td><span class="b local">local</span></td><td>Revision id.</td></tr>
+      <tr data-io="http"><td><code>experiment.summary()</code></td><td><code>dict</code></td><td><span class="b http">HTTP</span></td><td><code>id</code>, <code>name</code>, <code>published</code>, <code>settings</code>, <code>shared_fraction_realized</code>, <code>subject_ids</code>.</td></tr>
+      <tr data-io="http"><td><code>experiment.publish()</code></td><td>the same <code>Experiment</code></td><td><span class="b http">HTTP</span></td><td>Freezes assignments. Required before subjects or media.</td></tr>
+      <tr data-io="http"><td><code>experiment.subjects</code></td><td><code>tuple[Subject, ...]</code></td><td><span class="b http">HTTP</span> once</td><td>Cached on the object. <code>ApiError</code> if not published.</td></tr>
+      <tr data-io="http"><td><code>experiment.subject(id)</code></td><td><code>Subject</code></td><td><span class="b http">HTTP</span></td><td>Fetches and verifies that subject's manifest.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="cls"><h3 id="ref-subject">Subject</h3><span class="how">from <code>experiment.subjects</code></span></div>
+  <div class="tablewrap"><table class="ref">
+    <thead><tr><th scope="col">Member</th><th scope="col">Returns</th><th scope="col">Network</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr data-io="local"><td><code>subject.id</code>, <code>subject.experiment</code></td><td><code>str</code>, <code>Experiment</code></td><td><span class="b local">local</span></td><td></td></tr>
+      <tr data-io="local"><td><code>subject.session_ids</code></td><td><code>tuple[str, ...]</code></td><td><span class="b local">local</span></td><td>In assigned order.</td></tr>
+      <tr data-io="local"><td><code>subject.sessions</code></td><td><code>tuple[Session, ...]</code></td><td><span class="b local">local</span></td><td>The same objects on every access.</td></tr>
+      <tr data-io="local"><td><code>subject.session(id="session-001", *, directory=None)</code></td><td><code>Session</code></td><td><span class="b local">local</span></td><td>A new object; <code>directory</code> selects a non-default media folder.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="cls"><h3 id="ref-session">Session</h3><span class="how">from <code>subject.sessions</code> or <code>subject.session()</code></span></div>
+  <div class="tablewrap"><table class="ref">
+    <thead><tr><th scope="col">Member</th><th scope="col">Returns</th><th scope="col">Network</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr data-io="local"><td><code>session.id</code>, <code>session.subject</code>, <code>session.run_ids</code></td><td><code>str</code>, <code>Subject</code>, <code>tuple</code></td><td><span class="b local">local</span></td><td></td></tr>
+      <tr data-io="http"><td><code>session.start(*, takeover=False)</code></td><td><code>None</code></td><td><span class="b http">HTTP</span></td><td>Claims presentation. <code>takeover=True</code> replaces a stopped program.</td></tr>
+      <tr data-io="http"><td><code>session.finish(status="completed")</code></td><td><code>None</code></td><td><span class="b http">HTTP</span></td><td><code>"completed"</code>, <code>"interrupted"</code> or <code>"failed"</code>.</td></tr>
+      <tr data-io="http"><td><code>with session:</code></td><td>the session</td><td><span class="b http">HTTP</span></td><td>Start on entry; finish by outcome on exit (<a href="#outcomes">table</a>).</td></tr>
+      <tr data-io="http"><td><code>session.next_run()</code></td><td><code>Run | None</code></td><td><span class="b http">HTTP</span></td><td>First run with a trial neither completed nor abandoned.</td></tr>
+      <tr data-io="http"><td><code>session.run(id="latest")</code></td><td><code>Run</code></td><td><span class="b http">HTTP</span> for <code>"latest"</code><br><span class="b local">local</span> by id</td><td><code>"latest"</code> is the most recently started run.</td></tr>
+      <tr data-io="http"><td><code>session.record(trial, status, result=None)</code></td><td><code>None</code></td><td><span class="b http">HTTP</span></td><td>Any trial of the session. <code>result</code>: plain-JSON <code>dict</code> or <code>None</code>.</td></tr>
+      <tr data-io="http"><td><code>session.unconfirmed</code></td><td><code>tuple[Trial, ...]</code></td><td><span class="b http">HTTP</span> reads server</td><td>Started, with no ending.</td></tr>
+      <tr data-io="http"><td><code>session.abandoned</code></td><td><code>tuple[Trial, ...]</code></td><td><span class="b http">HTTP</span> reads server</td><td>Every abandoned trial.</td></tr>
+      <tr data-io="http"><td><code>session.results</code></td><td><code>list[dict]</code></td><td><span class="b http">HTTP</span> reads server</td><td>Recorded result payloads, each with its status.</td></tr>
+      <tr data-io="http"><td><code>session.download(directory=None)</code></td><td><code>Path</code></td><td><span class="b http">HTTP</span> <span class="b disk">disk</span></td><td>Every video of the session; skips verified files. Records nothing.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="cls"><h3 id="ref-run">Run</h3><span class="how">from <code>session.next_run()</code> or <code>session.run()</code></span></div>
+  <div class="tablewrap"><table class="ref">
+    <thead><tr><th scope="col">Member</th><th scope="col">Returns</th><th scope="col">Network</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr data-io="local"><td><code>run.id</code>, <code>run.session</code></td><td><code>str</code>, <code>Session</code></td><td><span class="b local">local</span></td><td></td></tr>
+      <tr data-io="local"><td><code>run.trials</code></td><td><code>tuple[Trial, ...]</code></td><td><span class="b local">local</span></td><td>Every assigned trial, in order, whatever its progress.</td></tr>
+      <tr data-io="http"><td><code>run.next_trial()</code></td><td><code>Trial | None</code></td><td><span class="b http">HTTP</span></td><td>Raises <code>ApiError</code> while any trial in the session is unconfirmed.</td></tr>
+      <tr data-io="http"><td><code>run.media(trial, mode="cache")</code></td><td><code>Path</code> or <code>str</code></td><td><span class="b disk">disk</span>, <span class="b http">HTTP</span> on a miss</td><td><a href="#media">Modes</a>: <code>"cache"</code>, <code>"local"</code>, <code>"remote"</code>.</td></tr>
+      <tr data-io="http"><td><code>run.record(trial, status, result=None)</code></td><td><code>None</code></td><td><span class="b http">HTTP</span></td><td>Same as <code>session.record</code>, for a trial of this run.</td></tr>
+      <tr data-io="http"><td><code>run.results</code></td><td><code>list[dict]</code></td><td><span class="b http">HTTP</span> reads server</td><td>This run's share of <code>session.results</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="cls"><h3 id="ref-values">Values and errors</h3><span class="how">immutable; no requests</span></div>
+  <div class="tablewrap"><table class="ref">
+    <thead><tr><th scope="col">Type</th><th scope="col">Fields</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr data-io="local"><td><code>Trial</code></td><td class="wrap"><code>trial_id</code>, <code>stimulus_id</code>, <code>position</code>, <code>role</code>, <code>media_type</code>, <code>segment</code></td><td>An assignment, not progress. <code>position</code> starts at 1 in each run; <code>role</code> is <code>"parent"</code>, <code>"repeat"</code> or <code>"foil"</code>; <code>media_type</code> is <code>"video"</code>.</td></tr>
+      <tr data-io="local"><td><code>Segment</code></td><td class="wrap"><code>start_seconds</code>, <code>end_seconds</code></td><td>Source interval of a split video, or <code>None</code>. Halves are already cut: play from time zero.</td></tr>
+      <tr data-io="local"><td><code>MetricFilter</code></td><td class="wrap"><code>metric_id</code>, <code>operator</code>, <code>value</code>, <code>to_dict()</code></td><td>Operators <code>&gt;=</code> <code>&lt;=</code> <code>&gt;</code> <code>&lt;</code> <code>==</code>, or <code>==</code>/<code>!=</code> with <code>True</code>/<code>False</code>; server codes such as <code>"gte"</code> also work.</td></tr>
+      <tr data-io="local"><td><code>Metric</code></td><td class="wrap"><code>id</code>, <code>label</code>, <code>kind</code>, <code>unit</code>, <code>operators</code></td><td>One row of <code>client.metrics()</code>.</td></tr>
+      <tr data-io="local"><td><code>ApiError</code></td><td class="wrap"><code>status</code></td><td>Server or protocol failure; <code>status</code> is the HTTP code or <code>None</code>. Shows at most a short server message; credentials, response bodies and connection details are withheld.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Bad arguments raise <code>ValueError</code> before any request; local disk failures raise <code>OSError</code>.</p>
+</section>
+
+<section id="boundaries" aria-labelledby="boundaries-h">
+  <h2 id="boundaries-h"><span class="n">8</span>Boundaries</h2>
+  <div class="cards">
+    <div class="card yours">
+      <h3>Not part of dbstim</h3>
+      <ul>
+        <li>Rendering, display timing or input handling.</li>
+        <li>Judging whether a trial was seen: you say so with <code>record()</code>.</li>
+        <li>A manifest file for using the videos without dbstim objects.</li>
+        <li>Recording progress while offline: every command needs the server.</li>
+      </ul>
+    </div>
+    <div class="card local">
+      <h3>Good to know</h3>
+      <ul>
+        <li>Synchronous; a <code>Client</code> and its objects are not thread-safe.</li>
+        <li>Video is the only media type.</li>
+        <li>Only <code>start</code>, <code>record</code> and <code>finish</code> are resent automatically; creating,
+          publishing and reads are not.</li>
+        <li>Python 3.11+, no runtime dependencies.</li>
+      </ul>
+    </div>
+  </div>
+  <footer>
+    Drawn from <code>src/dbstim/__init__.py</code>, <code>client.py</code>, <code>workflow.py</code>,
+    <code>models.py</code> and <code>_transport.py</code> at version 0.5.0;
+    <code>tests/test_api_interface.py</code> checks that every public member appears here.
+    See also <a href="api-classes.md">API objects</a>, <a href="server-to-local-flow.md">media and session flow</a>
+    and <a href="recovery.md">recovery</a>.
+  </footer>
+</section>
+
+</main>
+</div>
+<script>
+(function () {
+  var controls = document.getElementById('ref-controls');
+  if (!controls) return;
+  controls.hidden = false;
+  var buttons = controls.querySelectorAll('button');
+  controls.addEventListener('click', function (event) {
+    var button = event.target.closest('button');
+    if (!button) return;
+    var filter = button.getAttribute('data-filter');
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); });
+    document.querySelectorAll('table.ref tbody tr').forEach(function (row) {
+      row.hidden = filter !== 'all' && row.getAttribute('data-io') !== filter;
+    });
+  });
+})();
+</script>
+</body>
+</html>
