@@ -19,6 +19,7 @@ For the example notebook, add the Jupyter extra:
     pip install "dbstim[jupyter] @ git+https://github.com/lobennett/dbstim.git@v0.5.0"
 
 Sign in with your dbstimuli.com account; no Google Cloud or API key is needed.
+dbstim replaces the legacy `dbp_api` package (revision `d11933f`).
 
 ## Create and publish
 
@@ -38,8 +39,8 @@ experiment = client.create_experiment(
 experiment.publish()
 ```
 
-Reopen it with `client.experiment("Memory demo")`; if names repeat, the
-error lists the ids for `client.experiment(id=...)`.
+Reopen it with `client.experiment("Memory demo")`. If several share the name,
+the error lists their ids for `client.experiment(id=...)`.
 
 ## Present
 
@@ -55,25 +56,26 @@ with session:  # starts the session and finishes it when the block ends
             run.record(trial, "completed", result=result)
 ```
 
-Leaving the block finishes the session `completed` when every trial is
+Leaving the block finishes the session as `completed` if every trial was
 completed, `interrupted` if you stopped early (including Ctrl-C) or abandoned a
 trial, or `failed` if an error was raised. Results must be plain JSON (convert
 numpy numbers; use `None` for no response).
 
-Videos are verified and kept in your per-user cache (`~/.cache/dbstim`), so a
+dbstim verifies videos into your per-user cache (`~/.cache/dbstim`), so a
 notebook's `session.download()` serves later programs in any folder.
-`session.download(directory)` chooses another folder; `run.media(trial, mode="remote")`
-returns a five-minute streaming URL. `session.results` lists what you recorded.
+`session.download(directory)` uses another folder; `run.media(trial, mode="remote")`
+returns a five-minute streaming URL. `session.results` lists recorded results.
 
 The step-by-step notebook is `notebooks/api.ipynb`
 (`uv run --extra jupyter jupyter lab notebooks/api.ipynb` from a clone).
 
 ## When something goes wrong
 
-- **Stopped mid-trial:** `session.unconfirmed` lists the trial. Record it
-  `"completed"` only if it was shown to the end, otherwise
-  `session.record(trial, "abandoned")`. Nothing is replayed.
-- **Dropped connection:** commands are resent unchanged, never recorded twice.
+- **Stopped mid-trial:** record each trial in `session.unconfirmed` as
+  `"completed"` only if it was shown to the end, otherwise `"abandoned"`.
+  Nothing is replayed.
+- **Dropped connection:** `start`, `record` and `finish` are resent unchanged,
+  never recorded twice.
 - **"Another presenter owns this session":** once that program has stopped,
   call `session.start(takeover=True)`.
 
@@ -90,11 +92,9 @@ The step-by-step notebook is `notebooks/api.ipynb`
 - **shared_fraction:** share of parent videos every subject sees, rounded down;
   see `experiment.summary()["shared_fraction_realized"]`.
 - **sampling:** how YouTube channels are drawn: `"random"`, `"balanced"`, or `"unique"`.
-- **corpus:** searches `content` in `"captions"`, `"transcripts"`, or `"both"`.
-- **Unconfirmed:** recorded `started` but neither `completed` nor `abandoned`.
+- **corpus:** where `content` is searched: `"captions"`, `"transcripts"`, or `"both"`.
+- **Unconfirmed:** recorded `started`, with no ending yet.
 - **Abandoned:** not shown to the end; final; listed by `session.abandoned`.
-
-`dbstim` supersedes the legacy `dbp_api` package (revision `d11933f`).
 
 ## Development
 

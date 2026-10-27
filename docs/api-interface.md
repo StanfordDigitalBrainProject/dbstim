@@ -1,7 +1,7 @@
 # API map
 
-The interactive version is [api-interface.html](api-interface.html): download it
-and open it in any browser, no network needed. Both describe dbstim 0.5.0.
+[api-interface.html](api-interface.html) is the interactive version: download
+it and open it in any browser, offline. Both describe dbstim 0.5.0.
 
 Colors: **blue** sends HTTP to dbstimuli.com, **green** stays in your Python
 process, **amber** uses the media cache, **purple** is your own code.
@@ -35,9 +35,9 @@ flowchart TD
     classDef yours fill:#f1e8f8,stroke:#74419c,color:#1d232b
 ```
 
-Downloading fills the shared per-user cache (`~/.cache/dbstim`), so
-`run.media(trial)` later returns a verified file without a request; on a cache
-miss it downloads that one video. `mode="remote"` returns a short-lived URL instead.
+Downloading fills the per-user cache (`~/.cache/dbstim`); `run.media(trial)`
+then returns a verified file without a request, or downloads that one video if
+it is missing. `mode="remote"` returns a short-lived URL instead.
 
 ## Trial outcomes
 
@@ -56,20 +56,20 @@ stateDiagram-v2
     end note
 ```
 
-Neither ending is presented again. Leaving `with session:` sends `completed`
-when every trial is completed, `interrupted` after Ctrl-C or with any trial
-abandoned or unfinished, and `failed` when an exception was raised.
+Neither ending is presented again. Leaving `with session:` finishes the session
+as `completed` when every trial is completed, `interrupted` after Ctrl-C or when
+any trial is abandoned or unfinished, and `failed` after an exception.
 
 ## Recovery
 
 - **Stopped mid-trial:** record each of `session.unconfirmed` as `"completed"`
   only if it was shown to the end, otherwise `"abandoned"`.
 - **Dropped connection:** `start`, `record` and `finish` are resent unchanged on
-  connection failures and HTTP 500, 502, 503 or 504, never on 4xx. If all
-  attempts fail, repeat the same call on the same session object first.
+  connection failures and HTTP 500, 502, 503 or 504, never on 4xx. If every
+  attempt fails, repeat that call on the same session object before any other.
 - **Another presenter:** once it has stopped, `session.start(takeover=True)`.
 
-dbstim never renders video, judges whether a trial was seen, writes a
-standalone manifest, or records progress offline.
+dbstim does not render video, judge whether a trial was seen, write a
+standalone manifest, or record progress offline.
 
 [API objects](api-classes.md) · [Data flow](server-to-local-flow.md) · [Recovery](recovery.md)

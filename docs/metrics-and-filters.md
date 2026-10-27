@@ -1,8 +1,8 @@
 # Metric storage and filtering
 
-**The live metric index is a SQLite file on the GCP website VM.** CCN2/Sherlock
-compute measurements offline; the website does not query those clusters when
-you move a filter.
+**The live metric index is a SQLite file on the website's GCP VM.** CCN2 and
+Sherlock compute measurements offline; moving a filter never queries those
+clusters.
 
 ## Where the data live
 
@@ -22,15 +22,15 @@ flowchart TB
     Objects["GCP object storage<br/>actual MP4s and previews"] --> Playback
 ```
 
-These are **different databases**, not replicas of one shared CCN2 database.
-Cluster bookkeeping and raw results are not the website's serving index.
-Scientific values become live through explicit publication, not automatic database
-synchronization. Existing published assignments remain fixed.
+These are **separate databases**, not copies of one CCN2 database; cluster
+bookkeeping and raw results never serve the website. New values go live only
+when a new index is published, not by automatic sync; published assignments stay
+fixed.
 
-The deployed scientific file is `/srv/dbp/metrics/metrics.sqlite3`; the local
-preview uses `.local-data/metrics/metrics.sqlite3` in the operator workspace.
-SQLite runs inside the website process; this is not a PostgreSQL/Cloud SQL service.
-Video bytes live in object storage, not inside SQLite.
+On the VM the index is `/srv/dbp/metrics/metrics.sqlite3`; the local preview
+reads `.local-data/metrics/metrics.sqlite3` in the operator workspace. SQLite
+runs inside the website process, not as a PostgreSQL/Cloud SQL service.
+Video files live in object storage, not in SQLite.
 
 ## Inside the scientific index
 
@@ -55,8 +55,8 @@ erDiagram
     }
 ```
 
-The diagram shows logical joins. One clip can have many measurements, but at most
-one stored value per `(clip_id, metric_id)`. Provenance identifies the method,
+The diagram shows logical joins. A clip can have many measurements but at most
+one stored value per `(clip_id, metric_id)`. Provenance records the method,
 media hash and sampling scope. Other tables hold computation policies, histogram
 bins and catalog/version identity. Missing rows or null values mean **unknown**.
 
@@ -69,24 +69,24 @@ filters = [
 ]
 ```
 
-1. The API receives these comparisons, validates types/ranges/operators, and
-   compiles parameterized SQL against stored values.
-2. Each comparison selects matching clip IDs. The intersection (**AND**) must
-   satisfy both; unknown values fail an active comparison. An unset threshold
-   leaves that filter inactive.
-3. A batched server-side aggregation recomputes metric distributions over matching
-   **videos**, using the same bins as the full baseline. The browser receives
-   aggregates and one results page—not the entire database.
-4. Experiment creation samples from the eligible matching pool using the chosen
-   seed/design/channel rules. Matching metadata alone does not guarantee playable
-   media or assignment eligibility.
+1. The API validates each comparison's type, range and operator, then compiles
+   parameterized SQL over the stored values.
+2. A clip must match every comparison (**AND**); an unknown value fails any
+   active comparison. A filter with no threshold is inactive.
+3. A batched server-side aggregation recomputes metric distributions over the
+   matching **videos**, with the same bins as the full baseline. The browser
+   receives aggregates and one page of results, not the whole database.
+4. Creating an experiment samples from the eligible matching pool with the
+   chosen seed, design and channel rules. A filter match alone does not
+   guarantee playable media or assignment eligibility.
 
-No FFmpeg/OCR/VLM computation runs during filtering. Source views describe the
-original source video; its clips inherit that value. `client.metrics()` lists
+Filtering runs no FFmpeg/OCR/VLM computation. `source_view_count` belongs to
+the original source video, and its clips inherit it. `client.metrics()` lists
 metric definitions, not per-video measurements. Operators `>= <= > <` mean
-`gte lte gt lt`; `==` means `eq` for whole numbers, or `is` with `True`/`False`.
+`gte lte gt lt`; `==` means `eq` for whole numbers. With `True`/`False`,
+`==`/`!=` mean `is`/`is_not`.
 
-Implementation: website `metric_registry.py`, `metric_explorer.py`,
-`metric_artifact.py`; package `dbp_metrics` produces the worker results.
+Code: website `metric_registry.py`, `metric_explorer.py`,
+`metric_artifact.py`; `dbp_metrics` produces the worker results.
 
 [API objects](api-classes.md) · [Media and session flow](server-to-local-flow.md)

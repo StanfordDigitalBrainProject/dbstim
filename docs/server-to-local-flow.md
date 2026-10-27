@@ -2,9 +2,9 @@
 
 ## 1. Assignments and media
 
-Creation saves a filtered sample and design. Publishing freezes each subject's
-trial order, runs, and source intervals. Loading a subject verifies the manifest
-hash; downloading or previewing leaves presentation progress unchanged.
+Creating an experiment saves a filtered sample and design. Publishing freezes
+each subject's runs, trial order, and source intervals. Loading a subject
+verifies its manifest hash; downloading and previewing record no progress.
 
 ```mermaid
 flowchart TB
@@ -30,16 +30,16 @@ flowchart TB
     SDK -->|"authenticated requests"| API
 ```
 
-`session.download()` fetches the session's media into the per-user cache
-(`~/.cache/dbstim`) that every program shares; `run.media(trial)` fetches one item
-if not already verified there. `mode="local"` uses only verified files.
-Files are checked against size, SHA-256, and assignment identity. `mode="remote"`
-returns a five-minute streaming URL. Researchers authenticate to the website, not Google Cloud.
+`session.download()` fetches the session's videos into the per-user cache
+(`~/.cache/dbstim`) that every program shares; `run.media(trial)` fetches one
+video if not already verified there. Files are checked against size, SHA-256, and
+assignment identity. `mode="local"` uses only verified files; `mode="remote"`
+returns a five-minute streaming URL. You sign in to the website, not Google Cloud.
 
 ## 2. Record and resume
 
-Your task explicitly reports each presentation. The server records acknowledgments;
-it cannot infer that someone watched a clip from a download.
+Your task reports each presentation itself; the server cannot infer from a
+download that anyone watched a clip.
 
 ```mermaid
 sequenceDiagram
@@ -85,10 +85,11 @@ sequenceDiagram
 Completed and abandoned trials are final. An unconfirmed start anywhere in the
 session blocks every run until it is recorded completed or abandoned
 ([recovery](recovery.md)). Dropped commands are resent with the same request ID.
-An active presenter requires explicit `start(takeover=True)` to replace. An error
+Replacing an active presenter takes an explicit `start(takeover=True)`. An error
 inside `with session:` finishes it as `failed`.
 
 `session.next_run()` is the next unfinished run; `session.run("latest")` is the
-most recently started one. `session.results` reads reported results from the server. Deleting local downloads never resets server progress.
+most recently started one. `session.results` reads reported results from the
+server. Deleting local downloads never resets server progress.
 
 [API objects](api-classes.md) · [Metric storage and filters](metrics-and-filters.md)
