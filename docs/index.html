@@ -710,7 +710,7 @@ with session:  # claims the session and finishes it on exit
             </div>
             <ul style="font-size: 0.9rem; margin-bottom: 0;">
               <li><strong>Session outcome:</strong> Leaving <code>with session:</code> finishes the session as <code>"completed"</code> when every trial is completed, <code>"interrupted"</code> if you stop early (including Ctrl-C) or abandon a trial, or <code>"failed"</code> if an exception escapes the block.</li>
-              <li><strong>Your code verifies playback:</strong> <code>dbstim</code> only records what <code>present(path)</code> returns; it cannot see the screen. In PGL, <code>play()</code> returning does not prove frames were shown—check frame timestamps before recording <code>"completed"</code>.</li>
+              <li><strong>Your code reports playback:</strong> <code>dbstim</code> only records what <code>present(path)</code> returns; it cannot see the screen. In PGL, <code>play()</code> returning does not by itself prove the video was shown.</li>
               <li><strong>Trial fields:</strong> Each <code>Trial</code> has <code>trial_id</code>, <code>stimulus_id</code>, <code>position</code> (1-based), <code>role</code> (<code>"parent"</code>, <code>"repeat"</code>, or <code>"foil"</code>), <code>media_type="video"</code>, and <code>segment</code> (<code>Segment(start_seconds, end_seconds)</code> or <code>None</code>). Split halves and foils are already trimmed to play from time zero.</li>
             </ul>
           </div>
