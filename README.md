@@ -55,7 +55,7 @@ with session:  # starts the session and finishes it when the block ends
             run.record(trial, "completed", result=result)
 ```
 
-Leaving the block finishes the session as `completed` when every trial is
+Leaving the block finishes the session `completed` when every trial is
 completed, `interrupted` if you stopped early (including Ctrl-C) or abandoned a
 trial, or `failed` if an error was raised. Results must be plain JSON (convert
 numpy numbers; use `None` for no response).
@@ -94,7 +94,7 @@ The step-by-step notebook is `notebooks/api.ipynb`
 - **Unconfirmed:** recorded `started` but neither `completed` nor `abandoned`.
 - **Abandoned:** not shown to the end; final; listed by `session.abandoned`.
 
-The legacy `dbp_api` package (revision `d11933f`) is superseded by `dbstim`.
+`dbstim` supersedes the legacy `dbp_api` package (revision `d11933f`).
 
 ## Development
 
@@ -102,4 +102,4 @@ The legacy `dbp_api` package (revision `d11933f`) is superseded by `dbstim`.
 uv run python -m unittest discover -s tests -v
 ```
 
-[API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)
+[Guide](https://lobennett.github.io/dbstim/) · [API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)

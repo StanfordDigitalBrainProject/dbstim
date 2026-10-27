@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dbstim — Python API Guide (v0.5.0)</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f4c81'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='15' fill='%23ffffff'%3Edb%3C/text%3E%3C/svg%3E">
+  <meta name="description" content="Usage guide for the dbstim Python API client: install from GitHub, discover metrics, create and publish experiments, pre-stage verified media, and run tracked presentation sessions with honest interruption recovery.">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-muted: #f1f5f9;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --accent: #0f4c81;
+      --accent-soft: #e0f2fe;
+      --accent-border: #7dd3fc;
+      --code-bg: #0f172a;
+      --code-text: #f8fafc;
+      --code-border: #1e293b;
+      --warn-bg: #fffbeb;
+      --warn-border: #fcd34d;
+      --warn-text: #78350f;
+      --info-bg: #f0fdf4;
+      --info-border: #86efac;
+      --info-text: #14532d;
+      --danger-bg: #fef2f2;
+      --danger-border: #fca5a5;
+      --danger-text: #7f1d1d;
+      --radius: 10px;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    a:hover {
+      color: #075985;
+    }
+
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .topbar-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem 1.25rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 0.65rem;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: var(--text);
+      text-decoration: none;
+      font-family: var(--font-mono);
+    }
+
+    .badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+    }
+
+    .resource-links {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.38rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .btn-link:hover {
+      background: var(--surface-muted);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-link.primary {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+    }
+
+    .btn-link.primary:hover {
+      background: #075985;
+      color: #ffffff;
+    }
+
+    .layout {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 2.25rem;
+      align-items: start;
+    }
+
+    @media (max-width: 920px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        position: static !important;
+      }
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 4.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1rem;
+    }
+
+    .sidebar h2 {
+      margin: 0 0 0.6rem;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .toc-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .toc-list a {
+      display: block;
+      padding: 0.3rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    .toc-list a:hover {
+      background: var(--surface-muted);
+      color: var(--accent);
+    }
+
+    .sidebar-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0.9rem 0;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+
+    .hero, section.card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.6rem 1.85rem;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+
+    .hero h1 {
+      margin: 0 0 0.65rem;
+      font-size: 1.85rem;
+      line-height: 1.25;
+    }
+
+    .hero p.lead {
+      margin: 0 0 1.15rem;
+      font-size: 1.05rem;
+      color: var(--text-muted);
+    }
+
+    .hero-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 0.85rem;
+      margin-top: 1.1rem;
+    }
+
+    .mini-card {
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+    }
+
+    .mini-card strong {
+      display: block;
+      font-size: 0.9rem;
+      margin-bottom: 0.25rem;
+      color: var(--text);
+    }
+
+    .mini-card span {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    section.card h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.35rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    section.card h3 {
+      margin: 1.35rem 0 0.5rem;
+      font-size: 1.05rem;
+    }
+
+    p {
+      margin: 0 0 0.85rem;
+    }
+
+    ul, ol {
+      margin: 0 0 0.95rem;
+      padding-left: 1.35rem;
+    }
+
+    li {
+      margin-bottom: 0.35rem;
+    }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.88em;
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+    }
+
+    .code-wrap {
+      position: relative;
+      margin: 0.75rem 0 1rem;
+    }
+
+    pre {
+      margin: 0;
+      background: var(--code-bg);
+      color: var(--code-text);
+      border: 1px solid var(--code-border);
+      border-radius: 8px;
+      padding: 1rem 1.15rem;
+      overflow-x: auto;
+      font-size: 0.87rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 0.55rem;
+      right: 0.6rem;
+      background: rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 5px;
+      padding: 0.2rem 0.55rem;
+      font-size: 0.75rem;
+      font-family: var(--font-sans);
+      cursor: pointer;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+    }
+
+    .callout {
+      border-radius: 8px;
+      padding: 0.85rem 1.05rem;
+      margin: 0.9rem 0;
+      border: 1px solid;
+      font-size: 0.93rem;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+
+    .callout.warn {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+      color: var(--warn-text);
+    }
+
+    .callout.info {
+      background: var(--info-bg);
+      border-color: var(--info-border);
+      color: var(--info-text);
+    }
+
+    .callout.danger {
+      background: var(--danger-bg);
+      border-color: var(--danger-border);
+      color: var(--danger-text);
+    }
+
+    .split-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.15rem;
+      margin: 0.85rem 0;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.1rem;
+      background: var(--surface-muted);
+    }
+
+    .panel h3 {
+      margin-top: 0;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 0.75rem 0 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-muted);
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .pill {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+    }
+
+    .pill.http {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+
+    .pill.local {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+
+    footer {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <a class="brand-title" href="./">dbstim</a>
+        <span class="badge">v0.5.0</span>
+        <span style="color: var(--text-muted); font-size: 0.9rem;">Digital Brain Python API Client Guide</span>
+      </div>
+      <div class="resource-links" aria-label="API visualization and reference links">
+        <a class="btn-link primary" href="api-interface.html" id="link-api-interface-html">View API Interface Visualization</a>
+        <a class="btn-link" href="api-interface.md" download="api-interface.md" id="link-api-interface-md">Download API Reference (.md)</a>
+        <a class="btn-link" href="https://github.com/lobennett/dbstim">GitHub Repository</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" aria-label="Guide navigation">
+      <h2>Guide Contents</h2>
+      <ul class="toc-list">
+        <li><a href="#overview">Overview &amp; Responsibilities</a></li>
+        <li><a href="#install">1. Installation (GitHub Tag)</a></li>
+        <li><a href="#connect">2. Connection &amp; Configuration</a></li>
+        <li><a href="#metrics">3. Metric Discovery &amp; Filtering</a></li>
+        <li><a href="#experiments">4. Create, Publish &amp; Reopen</a></li>
+        <li><a href="#journeys">5. Download vs. Presentation Loop</a></li>
+        <li><a href="#timing">6. HTTP vs. Local &amp; Timing</a></li>
+        <li><a href="#recovery">7. Results &amp; Session Recovery</a></li>
+        <li><a href="#limitations">8. Scope &amp; Server Limitations</a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <h2>Companion Docs</h2>
+      <ul class="toc-list">
+        <li><a href="api-interface.html">Interactive API Interface (HTML)</a></li>
+        <li><a href="api-interface.md" download="api-interface.md">Download API Interface (.md)</a></li>
+        <li><a href="api-classes.md">API Classes (Markdown)</a></li>
+        <li><a href="server-to-local-flow.md">Server-to-Local Flow (Markdown)</a></li>
+        <li><a href="metrics-and-filters.md">Metrics &amp; Filters (Markdown)</a></li>
+        <li><a href="recovery.md">Recovering a Session (Markdown)</a></li>
+      </ul>
+    </aside>
+
+    <main>
+      <div class="hero" id="overview">
+        <h1>Using the <code>dbstim</code> Python API</h1>
+        <p class="lead">
+          <code>dbstim</code> is a zero-dependency Python 3.11+ client for creating experiments on
+          <strong>dbstimuli.com</strong>, caching SHA-256-verified stimulus videos on disk, and recording
+          trial-by-trial presentation progress from your own task program.
+        </p>
+        <div class="hero-cards">
+          <div class="mini-card">
+            <strong>Your Task Program Owns Rendering</strong>
+            <span>PGL, PsychoPy, or your custom player controls windowing, frame timing, stimulus playback, and response collection.</span>
+          </div>
+          <div class="mini-card">
+            <strong>The Server Owns Assignments &amp; State</strong>
+            <span>Publishing freezes subject/session/run manifests. Progress (<code>started</code>, <code>completed</code>, <code>abandoned</code>) is stored on the server.</span>
+          </div>
+          <div class="mini-card">
+            <strong>Shared Verified Local Cache</strong>
+            <span>Videos downloaded in a setup script or notebook are verified into <code>~/.cache/dbstim</code> and reused by task scripts in any folder.</span>
+          </div>
+        </div>
+        <div class="callout info" style="margin-top: 1.1rem; margin-bottom: 0;">
+          <strong>Interactive Interface Map &amp; Offline Reference</strong>
+          Explore the object hierarchy and call flows in the
+          <a href="api-interface.html">API Interface Visualization (HTML)</a> or
+          <a href="api-interface.md" download="api-interface.md">download the Markdown API reference (<code>api-interface.md</code>)</a>.
+          Every code snippet on this page is static documentation verified against local test fixtures—opening this page never contacts <code>dbstimuli.com</code>, creates experiments, or downloads study media.
+        </div>
+      </div>
+
+      <section class="card" id="install">
+        <h2>1. Installation (From GitHub Release Tag)</h2>
+        <p>
+          <code>dbstim</code> requires <strong>Python 3.11+</strong> and uses only the Python standard library at runtime.
+          It is distributed directly from its GitHub repository rather than PyPI—always install from a pinned release tag
+          (currently <code>v0.5.0</code>) or commit SHA so your study environment stays reproducible.
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-bash"># Install with pip from the v0.5.0 release tag
+pip install "git+https://github.com/lobennett/dbstim.git@v0.5.0"
+
+# Or add to a uv project
+uv add "dbstim @ git+https://github.com/lobennett/dbstim.git@v0.5.0"
+
+# Optional: include JupyterLab (&gt;=4,&lt;5) for the notebooks/api.ipynb walkthrough
+pip install "dbstim[jupyter] @ git+https://github.com/lobennett/dbstim.git@v0.5.0"</code></pre>
+        </div>
+        <p style="margin-bottom: 0; font-size: 0.92rem; color: var(--text-muted);">
+          Note: The legacy <code>dbp_api</code> package (revision <code>d11933f</code>) is superseded by <code>dbstim</code>.
+          No Google Cloud SDK, service account key, or separate API token is needed; you sign in with your normal
+          <code>dbstimuli.com</code> account.
+        </p>
+      </section>
+
+      <section class="card" id="connect">
+        <h2>2. Connection &amp; Configuration</h2>
+        <p>
+          Use <code>dbstim.connect()</code> for interactive sessions (such as Jupyter notebooks or operator terminals).
+          It prompts for your username if omitted and reads your password via <code>getpass</code> without echoing it to the screen:
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="connect-interactive">import dbstim
+
+# Prompts for "dbstimuli.com username: " and hidden password
+client = dbstim.connect()
+
+# Or supply a username placeholder and prompt only for the password
+client = dbstim.connect("your_username")</code></pre>
+        </div>
+        <p>
+          For non-interactive scripts or custom server targets, instantiate <code>Client</code> directly using placeholder
+          values or environment variables (never commit real passwords to source control):
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="connect-client">from dbstim import Client
+
+with Client(
+    "your_username",
+    "your_password",
+    # Default origin is https://dbstimuli.com (HTTP allowed only for localhost)
+    url="https://dbstimuli.com",
+    timeout=120,  # per-request socket timeout in seconds (default: 120)
+) as client:
+    print(client)  # &lt;Client your_username at https://dbstimuli.com&gt;</code></pre>
+        </div>
+        <ul>
+          <li><strong>In-memory credentials only:</strong> Session cookies and the CSRF token stay in memory on the <code>Client</code> instance and are cleared immediately by <code>client.close()</code>, exiting a <code>with client:</code> block, or an HTTP <code>401</code> response.</li>
+          <li><strong>Strict origin safety:</strong> Remote origins must use <code>https://</code> without embedded credentials, paths, queries, or fragments, and the HTTP transport never follows redirects.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="metrics">
+        <h2>3. Metric Discovery &amp; Filtering</h2>
+        <p>
+          Call <code>client.metrics()</code> to inspect the catalog metrics you can filter on when designing an experiment.
+          Each item is a frozen <code>Metric(id, label, kind, unit, operators)</code> object whose <code>repr</code>
+          displays its human-readable comparison symbols:
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="metrics-discover">from dbstim import MetricFilter
+
+metrics = client.metrics()
+for metric in metrics:
+    print(repr(metric))
+# Example output:
+# &lt;Metric duration_seconds: Duration (number, seconds); operators &gt; &gt;=&gt;
+
+filters = [
+    MetricFilter("duration_seconds", "&gt;=", 10),
+    MetricFilter("duration_seconds", "&lt;=", 20),
+    MetricFilter("audio_track_present", "==", True),
+]</code></pre>
+        </div>
+        <ul>
+          <li><strong>Definitions, not per-clip rows:</strong> <code>client.metrics()</code> lists metric definitions and allowed operators; actual filtering happens server-side against the published SQLite metric index when you create an experiment.</li>
+          <li><strong>Operators:</strong> Numeric metrics accept <code>"&gt;="</code>, <code>"&lt;="</code>, <code>"&gt;"</code>, <code>"&lt;"</code>, <code>"=="</code> (or server codes <code>"gte"</code>, <code>"lte"</code>, <code>"gt"</code>, <code>"lt"</code>, <code>"eq"</code>). Boolean (<code>True</code>/<code>False</code>) metrics accept <code>"=="</code> and <code>"!="</code> (mapped to <code>"is"</code> and <code>"is_not"</code>; <code>"!="</code> is restricted to booleans).</li>
+          <li><strong>Intersection semantics:</strong> Multiple <code>MetricFilter</code> entries combine with logical <strong>AND</strong>. Clips with unknown (<code>NULL</code>) values fail active comparisons.</li>
+          <li><strong>Text search:</strong> <code>create_experiment(..., content="...", corpus="both")</code> searches clip text across <code>"captions"</code>, <code>"transcripts"</code>, or <code>"both"</code>.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="experiments">
+        <h2>4. Creating, Publishing &amp; Reopening Experiments</h2>
+        <h3>Creating a draft and publishing</h3>
+        <p>
+          <code>client.create_experiment(...)</code> validates your design counts locally, queries the server to pin the current
+          catalog version, and saves a draft experiment. Calling <code>experiment.publish()</code> freezes every subject's
+          session, run, and trial assignments into a SHA-256-verified manifest:
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="experiment-create-publish">experiment = client.create_experiment(
+    "Memory demo",
+    subjects=5,
+    sessions_per_subject=1,
+    runs_per_session=2,
+    trials_per_run=24,
+    foils_per_run=4,
+    repeats_per_run=0,
+    shared_fraction=0.1,
+    seed=1,
+    sampling="random",  # "random", "balanced", or "unique" YouTube channel sampling
+    filters=[
+        MetricFilter("duration_seconds", "&gt;=", 10),
+        MetricFilter("duration_seconds", "&lt;=", 20),
+    ],
+    content="",
+    corpus="both",      # "captions", "transcripts", or "both"
+)
+
+# Publish to freeze subject/session/run manifests before accessing experiment.subjects
+experiment.publish()
+summary = experiment.summary()
+print(summary["id"], summary["published"], summary["shared_fraction_realized"])</code></pre>
+        </div>
+        <ul>
+          <li><strong>Trial composition per run:</strong> Foils (second halves of split parent videos) and repeats count toward <code>trials_per_run</code>. Every run has <code>parents = trials_per_run - foils_per_run - repeats_per_run</code> initial parent presentations (requiring <code>parents &gt;= 1</code> and <code>max(foils_per_run, repeats_per_run) &lt;= parents</code>), consisting of <code>trials_per_run - 2*foils_per_run - repeats_per_run</code> full videos, <code>foils_per_run</code> first halves, <code>foils_per_run</code> complementary second-half foils, and <code>repeats_per_run</code> repeats.</li>
+          <li><strong>Scale limits:</strong> Up to <code>100</code> subjects and <code>50,000</code> total presentations (<code>subjects * sessions_per_subject * runs_per_session * trials_per_run</code>).</li>
+          <li><strong>Shared fraction rounding:</strong> <code>shared_fraction</code> (<code>0</code> to <code>1</code>) sets the share of parent videos every subject sees, rounded down to whole videos. If rounding changes the share, <code>create_experiment</code> issues a <code>UserWarning</code> and <code>experiment.summary()["shared_fraction_realized"]</code> reports the exact realized fraction.</li>
+          <li><strong>Publication requirement:</strong> Accessing <code>experiment.subjects</code> on an unpublished draft raises <code>ApiError("Publish the experiment before choosing subjects")</code>.</li>
+        </ul>
+
+        <h3>Reopening an existing experiment</h3>
+        <p>
+          Each call to <code>create_experiment(...)</code> creates a new experiment record on the server even if the name was used before.
+          <code>client.experiment(name)</code> opens the unique match (preferring its latest published revision), or raises a
+          <code>ValueError</code> listing all matching revision IDs and creation timestamps so you can disambiguate with <code>id=</code>:
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="experiment-reopen"># List all experiments owned by your account
+all_experiments = client.experiments()
+
+# Reopen by exact name when unambiguous
+experiment = client.experiment("Memory demo")
+
+# Or reopen a specific revision ID directly (required if multiple experiments share a name)
+experiment = client.experiment(id="experiment-1")</code></pre>
+        </div>
+      </section>
+
+      <section class="card" id="journeys">
+        <h2>5. Two Separate Journeys: Media Download vs. Tracked Presentation</h2>
+        <p>
+          <code>dbstim</code> separates <strong>fetching/previewing video files</strong> from <strong>running a tracked participant session</strong>.
+          Pre-staging or previewing videos never claims a session or records participant progress on the server.
+        </p>
+
+        <div class="split-grid">
+          <div class="panel">
+            <h3>Journey A: Shortest Media-Download Path (Untracked)</h3>
+            <p>
+              Use <code>session.download()</code> in a setup script or notebook before the participant arrives.
+              It downloads and verifies every MP4 in the session into your per-user cache (<code>~/.cache/dbstim</code>)
+              without calling <code>start()</code> or modifying server progress:
+            </p>
+            <div class="code-wrap">
+              <pre><code class="language-python" data-snippet="journey-download">experiment = client.experiment("Memory demo")
+session = experiment.subjects[0].sessions[0]
+
+# Downloads &amp; verifies all session MP4s into ~/.cache/dbstim
+cache_folder = session.download()
+
+# Preview or inspect a file path without starting the session
+run = session.next_run()
+if run is not None:
+    first_mp4 = run.media(run.trials[0], mode="local")</code></pre>
+            </div>
+            <ul style="font-size: 0.9rem; margin-bottom: 0;">
+              <li><strong>Shared across directories:</strong> Because the default cache lives under <code>$XDG_CACHE_HOME/dbstim</code> or <code>~/.cache/dbstim</code> (partitioned by origin hash, experiment ID, subject ID, manifest SHA-256, and session ID), a download from <code>notebooks/api.ipynb</code> is automatically reused by your task program running from any folder.</li>
+              <li><strong>Custom folder:</strong> Pass <code>session.download("/path/on/main/disk")</code> or <code>subject.session("session-001", directory="/path/on/main/disk")</code>. Note that the target filesystem must support hard links (drives formatted as exFAT or FAT raise an <code>OSError</code>).</li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <h3>Journey B: Tracked Session / Run / Trial Loop</h3>
+            <p>
+              When presenting to a participant, enter <code>with session:</code> and iterate through
+              <code>session.next_run()</code> and <code>run.next_trial()</code>. Your task function (<code>present(path)</code>)
+              renders the video and returns a plain-JSON result dictionary:
+            </p>
+            <div class="code-wrap">
+              <pre><code class="language-python" data-snippet="journey-present">session = experiment.subjects[0].sessions[0]
+
+with session:  # calls session.start(); finishes on exit
+    while (run := session.next_run()) is not None:
+        while (trial := run.next_trial()) is not None:
+            path = run.media(trial)  # verified local Path
+            run.record(trial, "started")
+            result = present(path)   # your PGL / PsychoPy renderer
+            run.record(trial, "completed", result=result)</code></pre>
+            </div>
+            <ul style="font-size: 0.9rem; margin-bottom: 0;">
+              <li><strong>Automatic session outcome:</strong> Exiting <code>with session:</code> calls <code>session.finish(status)</code> with <code>"completed"</code> when every trial in the session is <code>"completed"</code>, <code>"interrupted"</code> if you stopped early (including Ctrl-C) or abandoned a trial, or <code>"failed"</code> if an exception was raised.</li>
+              <li><strong>Pre-sliced segments:</strong> Every <code>Trial</code> has <code>trial_id</code>, <code>stimulus_id</code>, <code>position</code> (1-based within the run), <code>role</code> (<code>"parent"</code>, <code>"repeat"</code>, or <code>"foil"</code>), <code>media_type="video"</code>, and <code>segment</code> (<code>Segment(start_seconds, end_seconds)</code> or <code>None</code>). Server-rendered halves and foils play from time zero of the downloaded MP4.</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>Media resolution modes (<code>run.media(trial, mode=...)</code>)</h3>
+        <ul>
+          <li><code>mode="cache"</code> <em>(default)</em>: Returns the verified local <code>Path</code> if already in the cache (checking SHA-256, byte size, and manifest receipt), or downloads and verifies it on demand.</li>
+          <li><code>mode="local"</code>: Strictly offline check—returns the verified local <code>Path</code> if already downloaded, or immediately raises <code>ApiError</code> without making any network request. Ideal inside time-critical presentation loops after <code>session.download()</code>.</li>
+          <li><code>mode="remote"</code>: Requests a temporary 5-minute streaming URL (<code>https://dbstimuli.com/api/v1/media-access/...</code>) from the server without writing to local disk.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="timing">
+        <h2>6. HTTP vs. Local Operations &amp; Timing Consequences</h2>
+        <p>
+          All network calls in <code>dbstim</code> are synchronous. Understanding which calls contact the server versus which
+          inspect already-loaded memory or local disk lets you keep stimulus onset timing tight in PGL or PsychoPy.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Operation</th>
+                <th>I/O Type</th>
+                <th>What Happens &amp; Timing Consequence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>connect()</code>, <code>Client(...)</code>, <code>client.metrics()</code>, <code>client.experiments()</code>, <code>client.experiment(...)</code>, <code>client.create_experiment(...)</code>, <code>experiment.publish()</code>, <code>experiment.summary()</code></td>
+                <td><span class="pill http">HTTP</span></td>
+                <td>Synchronous HTTPS request(s) to <code>dbstimuli.com</code>. Call during experiment setup or startup, never during stimulus presentation.</td>
+              </tr>
+              <tr>
+                <td><code>experiment.subjects</code></td>
+                <td><span class="pill http">HTTP (1st)</span> <span class="pill local">Local (cached)</span></td>
+                <td>First access fetches the published experiment document containing all subject manifests; subsequent accesses on the same <code>Experiment</code> instance return the cached tuple immediately. (Calling <code>experiment.subject(id)</code> directly fetches <code>.../manifest</code> over HTTP.)</td>
+              </tr>
+              <tr>
+                <td><code>subject.sessions</code>, <code>subject.session(id)</code>, <code>subject.session_ids</code>, <code>session.run_ids</code>, <code>session.run("run-001")</code>, <code>run.trials</code>, <code>trial.*</code>, <code>repr(...)</code></td>
+                <td><span class="pill local">Local (Memory)</span></td>
+                <td>Zero network or disk I/O. Reads parsed, hash-verified manifest dataclasses already in memory.</td>
+              </tr>
+              <tr>
+                <td><code>session.download()</code></td>
+                <td><span class="pill http">HTTP + Disk</span></td>
+                <td>Downloads any missing MP4s in the session and verifies SHA-256 checksums for all session files. Run <strong>before</strong> starting your task loop.</td>
+              </tr>
+              <tr>
+                <td><code>run.media(trial, mode="local")</code><br><em>(or <code>mode="cache"</code> after <code>session.download()</code>)</em></td>
+                <td><span class="pill local">Local (Disk SHA-256)</span></td>
+                <td>Zero network I/O. Hashes the local MP4 file with SHA-256 and checks its size and JSON receipt on disk. Call before trial onset to obtain the file path before flipping your first video frame.</td>
+              </tr>
+              <tr>
+                <td><code>run.media(trial, mode="remote")</code></td>
+                <td><span class="pill http">HTTP</span></td>
+                <td><code>POST .../media-access</code> to mint a 5-minute streaming URL.</td>
+              </tr>
+              <tr>
+                <td><code>session.next_run()</code>, <code>session.run("latest")</code>, <code>run.next_trial()</code>, <code>session.unconfirmed</code>, <code>session.abandoned</code>, <code>session.results</code>, <code>run.results</code></td>
+                <td><span class="pill http">HTTP GET</span></td>
+                <td>Each call fetches current server session state (<code>GET .../sessions/{id}</code>) and verifies the manifest SHA-256. Call between trials, not inside a frame-rendering loop.</td>
+              </tr>
+              <tr>
+                <td><code>session.start()</code>, <code>session.finish()</code>, <code>run.record(...)</code>, <code>session.record(...)</code></td>
+                <td><span class="pill http">HTTP POST (Retryable)</span></td>
+                <td>Sends a deduplicated command to the server. On connection failure or HTTP <code>500/502/503/504</code>, automatically retries up to 3 times with <strong>0.5s, 1.0s, and 2.0s</strong> pauses (up to ~3.5s plus socket timeouts). Call immediately before/after presentation, outside your frame loop.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" id="recovery">
+        <h2>7. Recording Results &amp; Honest Interruption / Recovery</h2>
+
+        <h3>Plain-JSON result validation</h3>
+        <p>
+          <code>run.record(trial, status, result=...)</code> validates <code>result</code> locally before sending any network request.
+          <code>result</code> must be <code>None</code> or a plain JSON <code>dict</code> containing only <code>str</code>, <code>int</code>,
+          <code>float</code> (finite only—no <code>NaN</code> or <code>inf</code>), <code>bool</code>, <code>None</code>, <code>list</code>,
+          and <code>dict</code>. Convert NumPy scalars with <code>int(x)</code> or <code>float(x)</code>, and use <code>None</code> when a
+          participant gives no response:
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="results-validation"># Valid plain-JSON result payload (use int()/float() for numpy scalars, None for no response)
+run.record(trial, "completed", result={"rt_ms": int(412), "choice": "left", "confidence": None})
+
+# Read back server-recorded results at any time, including after all trials are finished
+all_results = session.results
+current_run_results = run.results</code></pre>
+        </div>
+
+        <h3>Resolving an interrupted (unconfirmed) trial</h3>
+        <p>
+          Every started trial ends in exactly one terminal state: <code>"completed"</code> (shown to the end) or
+          <code>"abandoned"</code> (cut short by Ctrl-C, a crash, equipment trouble, or participant withdrawal).
+          <strong>Neither is ever replayed automatically.</strong>
+          If a program stops after <code>record(trial, "started")</code> without recording an ending, that trial is listed in
+          <code>session.unconfirmed</code> and blocks <code>run.next_trial()</code> across the entire session until you resolve it:
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="recovery-unconfirmed">session = experiment.subjects[0].sessions[0]
+
+with session:
+    # Resolve any trial left unconfirmed by an earlier interruption:
+    # Use "completed" ONLY if the participant actually saw the video to the end.
+    for trial in session.unconfirmed:
+        session.record(trial, "abandoned", result={"reason": "stopped mid-trial"})
+
+    while (run := session.next_run()) is not None:
+        while (trial := run.next_trial()) is not None:
+            path = run.media(trial)
+            run.record(trial, "started")
+            result = present(path)
+            run.record(trial, "completed", result=result)
+
+# session.abandoned lists every abandoned Trial (even if recorded with result=None)
+# session.results lists only trials where a non-None result dict was recorded
+print(session.abandoned, session.results)</code></pre>
+        </div>
+        <div class="callout warn">
+          <strong>Sessions with abandoned trials finish as <code>"interrupted"</code></strong>
+          Because an abandoned trial was not completed, leaving <code>with session:</code> marks the session
+          <code>"interrupted"</code> even after all remaining trials in every run have been presented. Calling
+          <code>session.finish("completed")</code> on a session with abandoned trials is rejected by the server (HTTP 409).
+        </div>
+
+        <h3>Dropped connections &amp; bounded command retries</h3>
+        <p>
+          <code>start()</code>, <code>finish()</code>, and <code>record()</code> attach a unique <code>request_id</code> and
+          <code>writer_id</code>. If a connection drops or the server returns HTTP <code>500</code>, <code>502</code>,
+          <code>503</code>, or <code>504</code>, <code>dbstim</code> resends the exact same payload up to 3 times (pausing
+          <code>0.5s</code>, <code>1.0s</code>, and <code>2.0s</code>). The server deduplicates by <code>request_id</code>,
+          so a trial or session event is never recorded twice. Client errors (<code>4xx</code>) are never retried.
+        </p>
+        <p>
+          If all 4 attempts fail, <code>dbstim</code> keeps that command pending on the <code>Session</code> instance and blocks
+          <code>next_run()</code>, <code>next_trial()</code>, and <code>finish()</code> until you repeat that exact same call
+          on the same <code>session</code> / <code>run</code> object.
+        </p>
+
+        <h3>Taking over from a crashed presenter</h3>
+        <p>
+          If a previous task process crashed before exiting <code>with session:</code>, its presenter claim remains active on the
+          server and a new <code>session.start()</code> raises <code>ApiError</code> (<code>HTTP 409: Another presenter owns this session</code>).
+          Once you have verified that the previous program is no longer running, claim the session explicitly with
+          <code>takeover=True</code>:
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="recovery-takeover"># Only after confirming the previous task process has stopped:
+session.start(takeover=True)
+with session:
+    for trial in session.unconfirmed:
+        session.record(trial, "abandoned", result={"reason": "previous process crashed"})
+    while (run := session.next_run()) is not None:
+        while (trial := run.next_trial()) is not None:
+            path = run.media(trial)
+            run.record(trial, "started")
+            result = present(path)
+            run.record(trial, "completed", result=result)</code></pre>
+        </div>
+      </section>
+
+      <section class="card" id="limitations">
+        <h2>8. Current Scope, Upgrading &amp; Verification Limitations</h2>
+        <ul>
+          <li>
+            <strong>Live server-backed progress (no offline event sync or portable export bundles):</strong>
+            <code>dbstim</code> caches video files locally in <code>~/.cache/dbstim</code>, but experiment creation, session claims
+            (<code>start</code>/<code>finish</code>), progress queries (<code>next_run</code>/<code>next_trial</code>), and trial event
+            recording (<code>record</code>) always communicate with the server over HTTPS. Offline event queuing/synchronization
+            and standalone portable experiment exports are not implemented.
+          </li>
+          <li>
+            <strong>Server requirement for <code>"abandoned"</code> trial outcomes:</strong>
+            Recording <code>session.record(trial, "abandoned")</code> requires the server to run
+            <code>dbp-dataset-browser</code> revision <code>492a894</code> or later with its abandoned-outcomes database migration
+            applied. If a deployed server predates that upgrade, calling <code>record(trial, "abandoned")</code> raises
+            <code>ApiError</code> (<code>HTTP 400: ... This server may predate abandoned trials; ask its operator to upgrade it</code>)
+            and leaves the trial unconfirmed without changing server state.
+          </li>
+          <li>
+            <strong>Upgrading from <code>dbstim</code> 0.4 to 0.5:</strong>
+            <code>dbstim</code> 0.4 stored downloaded media in a working-directory <code>.dbstim</code> folder and could not advance past
+            an abandoned trial. Version 0.5 uses the shared per-user cache (<code>~/.cache/dbstim</code>) and ignores old
+            <code>.dbstim</code> folders (which you can delete when convenient).
+          </li>
+          <li>
+            <strong>Verification evidence boundary:</strong>
+            All examples and behaviors documented in this guide are verified against the <code>dbstim</code> <code>v0.5.0</code>
+            source and local HTTP test fixtures (<code>tests/test_dstim.py</code>, <code>tests/test_usability.py</code>,
+            <code>tests/test_models_and_cache.py</code>, <code>tests/test_transport.py</code>). Automated tests do not create
+            experiments or mutate state on the live <code>dbstimuli.com</code> production server; live server feature availability
+            depends on the operator's currently deployed server revision and database state.
+          </li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <div>
+      <strong>dbstim v0.5.0</strong> · Python 3.11+ API Client ·
+      <a href="https://github.com/lobennett/dbstim">github.com/lobennett/dbstim</a>
+    </div>
+    <div>
+      <a href="api-interface.html">API Interface Visualization (HTML)</a> ·
+      <a href="api-interface.md" download="api-interface.md">Download API Reference (.md)</a> ·
+      <a href="recovery.md">Recovery Guide</a>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('.code-wrap pre').forEach((pre) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy-btn';
+      btn.textContent = 'Copy';
+      btn.setAttribute('aria-label', 'Copy code to clipboard');
+      btn.addEventListener('click', async () => {
+        const code = pre.querySelector('code');
+        if (!code || !navigator.clipboard) return;
+        try {
+          await navigator.clipboard.writeText(code.innerText);
+          btn.textContent = 'Copied';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        } catch (_) {
+          btn.textContent = 'Failed';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        }
+      });
+      pre.parentElement.appendChild(btn);
+    });
+  </script>
+</body>
+</html>
