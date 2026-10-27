@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>dbstim — Python API Guide (v0.5.0)</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f4c81'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='15' fill='%23ffffff'%3Edb%3C/text%3E%3C/svg%3E">
-  <meta name="description" content="Usage guide for the dbstim Python API client: install from GitHub, discover metrics, create and publish experiments, pre-stage verified media, and run tracked presentation sessions with honest interruption recovery.">
+  <meta name="description" content="Guide to the dbstim Python API: install from GitHub, filter clips by metric, create and publish experiments, download verified videos, and record session progress.">
   <style>
     :root {
       --bg: #f8fafc;
@@ -460,7 +460,7 @@
       <div class="brand">
         <a class="brand-title" href="./">dbstim</a>
         <span class="badge">v0.5.0</span>
-        <span style="color: var(--text-muted); font-size: 0.9rem;">Digital Brain Python API Client Guide</span>
+        <span style="color: var(--text-muted); font-size: 0.9rem;">Python API Guide</span>
       </div>
       <div class="resource-links" aria-label="API visualization and reference links">
         <a class="btn-link primary" href="api-interface.html" id="link-api-interface-html">View API Interface Visualization</a>
@@ -472,103 +472,98 @@
 
   <div class="layout">
     <aside class="sidebar" aria-label="Guide navigation">
-      <h2>Guide Contents</h2>
+      <h2>Contents</h2>
       <ul class="toc-list">
-        <li><a href="#overview">Overview &amp; Responsibilities</a></li>
-        <li><a href="#install">1. Installation (GitHub Tag)</a></li>
-        <li><a href="#connect">2. Connection &amp; Configuration</a></li>
-        <li><a href="#metrics">3. Metric Discovery &amp; Filtering</a></li>
-        <li><a href="#experiments">4. Create, Publish &amp; Reopen</a></li>
-        <li><a href="#journeys">5. Download vs. Presentation Loop</a></li>
-        <li><a href="#timing">6. HTTP vs. Local &amp; Timing</a></li>
-        <li><a href="#recovery">7. Results &amp; Session Recovery</a></li>
-        <li><a href="#limitations">8. Scope &amp; Server Limitations</a></li>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#install">1. Install</a></li>
+        <li><a href="#connect">2. Connect</a></li>
+        <li><a href="#metrics">3. Filter by metric</a></li>
+        <li><a href="#experiments">4. Create and publish</a></li>
+        <li><a href="#journeys">5. Download vs. present</a></li>
+        <li><a href="#timing">6. Network vs. local calls</a></li>
+        <li><a href="#recovery">7. Results and recovery</a></li>
+        <li><a href="#limitations">8. Limitations</a></li>
       </ul>
       <div class="sidebar-divider"></div>
-      <h2>Companion Docs</h2>
+      <h2>Reference Docs</h2>
       <ul class="toc-list">
-        <li><a href="api-interface.html">Interactive API Interface (HTML)</a></li>
-        <li><a href="api-interface.md" download="api-interface.md">Download API Interface (.md)</a></li>
-        <li><a href="api-classes.md">API Classes (Markdown)</a></li>
-        <li><a href="server-to-local-flow.md">Server-to-Local Flow (Markdown)</a></li>
-        <li><a href="metrics-and-filters.md">Metrics &amp; Filters (Markdown)</a></li>
-        <li><a href="recovery.md">Recovering a Session (Markdown)</a></li>
+        <li><a href="api-interface.html">Interactive API Map (HTML)</a></li>
+        <li><a href="api-interface.md" download="api-interface.md">API Reference (.md)</a></li>
+        <li><a href="api-classes.md">API Objects</a></li>
+        <li><a href="server-to-local-flow.md">Server-to-Local Flow</a></li>
+        <li><a href="metrics-and-filters.md">Metrics &amp; Filters</a></li>
+        <li><a href="recovery.md">Recovering a Session</a></li>
       </ul>
     </aside>
 
     <main>
       <div class="hero" id="overview">
-        <h1>Using the <code>dbstim</code> Python API</h1>
+        <h1>Using <code>dbstim</code></h1>
         <p class="lead">
-          <code>dbstim</code> is a zero-dependency Python 3.11+ client for creating experiments on
-          <strong>dbstimuli.com</strong>, caching SHA-256-verified stimulus videos on disk, and recording
-          trial-by-trial presentation progress from your own task program.
+          <code>dbstim</code> is a Python 3.11+ client for creating experiments on
+          <strong>dbstimuli.com</strong>, downloading SHA-256-verified stimulus videos, and recording
+          trial progress from your task program.
         </p>
         <div class="hero-cards">
           <div class="mini-card">
-            <strong>Your Task Program Owns Rendering</strong>
-            <span>PGL, PsychoPy, or your custom player controls windowing, frame timing, stimulus playback, and response collection.</span>
+            <strong>Your task plays the video</strong>
+            <span>PGL, PsychoPy, or your own player opens the window, controls frame timing, and collects responses.</span>
           </div>
           <div class="mini-card">
-            <strong>The Server Owns Assignments &amp; State</strong>
-            <span>Publishing freezes subject/session/run manifests. Progress (<code>started</code>, <code>completed</code>, <code>abandoned</code>) is stored on the server.</span>
+            <strong>The server tracks progress</strong>
+            <span>Publishing freezes each subject's trials. The server records which trials started, completed, or were abandoned.</span>
           </div>
           <div class="mini-card">
-            <strong>Shared Verified Local Cache</strong>
-            <span>Videos downloaded in a setup script or notebook are verified into <code>~/.cache/dbstim</code> and reused by task scripts in any folder.</span>
+            <strong>One local cache per user</strong>
+            <span><code>session.download()</code> verifies MP4s into <code>~/.cache/dbstim</code>, where task scripts in any folder can reuse them.</span>
           </div>
         </div>
         <div class="callout info" style="margin-top: 1.1rem; margin-bottom: 0;">
-          <strong>Interactive Interface Map &amp; Offline Reference</strong>
-          Explore the object hierarchy and call flows in the
-          <a href="api-interface.html">API Interface Visualization (HTML)</a> or
-          <a href="api-interface.md" download="api-interface.md">download the Markdown API reference (<code>api-interface.md</code>)</a>.
-          Every code snippet on this page is static documentation verified against local test fixtures—opening this page never contacts <code>dbstimuli.com</code>, creates experiments, or downloads study media.
+          <strong>Reference map</strong>
+          See the <a href="api-interface.html">interactive API map</a>, download
+          <a href="api-interface.md" download="api-interface.md"><code>api-interface.md</code></a>, or read
+          <a href="api-classes.md">API Objects</a> and <a href="server-to-local-flow.md">Server-to-Local Flow</a>
+          for class diagrams and request sequences.
         </div>
       </div>
 
       <section class="card" id="install">
-        <h2>1. Installation (From GitHub Release Tag)</h2>
+        <h2>1. Install</h2>
         <p>
-          <code>dbstim</code> requires <strong>Python 3.11+</strong> and uses only the Python standard library at runtime.
-          It is distributed directly from its GitHub repository rather than PyPI—always install from a pinned release tag
-          (currently <code>v0.5.0</code>) or commit SHA so your study environment stays reproducible.
+          <code>dbstim</code> requires <strong>Python 3.11+</strong> and uses only the standard library at runtime.
+          Install it from a pinned GitHub tag (currently <code>v0.5.0</code>) or commit SHA so your study environment
+          stays reproducible; it is not published on PyPI.
         </p>
         <div class="code-wrap">
-          <pre><code class="language-bash"># Install with pip from the v0.5.0 release tag
+          <pre><code class="language-bash"># Install with pip
 pip install "git+https://github.com/lobennett/dbstim.git@v0.5.0"
 
 # Or add to a uv project
 uv add "dbstim @ git+https://github.com/lobennett/dbstim.git@v0.5.0"
 
-# Optional: include JupyterLab (&gt;=4,&lt;5) for the notebooks/api.ipynb walkthrough
+# Optional: include JupyterLab (&gt;=4,&lt;5) for notebooks/api.ipynb
 pip install "dbstim[jupyter] @ git+https://github.com/lobennett/dbstim.git@v0.5.0"</code></pre>
         </div>
         <p style="margin-bottom: 0; font-size: 0.92rem; color: var(--text-muted);">
-          Note: The legacy <code>dbp_api</code> package (revision <code>d11933f</code>) is superseded by <code>dbstim</code>.
-          No Google Cloud SDK, service account key, or separate API token is needed; you sign in with your normal
-          <code>dbstimuli.com</code> account.
+          Sign in with your <code>dbstimuli.com</code> account—no Google Cloud SDK or separate API key is needed.
+          <code>dbstim</code> replaces the legacy <code>dbp_api</code> package (<code>d11933f</code>).
         </p>
       </section>
 
       <section class="card" id="connect">
-        <h2>2. Connection &amp; Configuration</h2>
+        <h2>2. Connect</h2>
         <p>
-          Use <code>dbstim.connect()</code> for interactive sessions (such as Jupyter notebooks or operator terminals).
-          It prompts for your username if omitted and reads your password via <code>getpass</code> without echoing it to the screen:
+          In interactive terminals or notebooks, <code>dbstim.connect()</code> prompts for your username and reads
+          your password via <code>getpass</code>:
         </p>
         <div class="code-wrap">
           <pre><code class="language-python" data-snippet="connect-interactive">import dbstim
 
-# Prompts for "dbstimuli.com username: " and hidden password
 client = dbstim.connect()
-
-# Or supply a username placeholder and prompt only for the password
-client = dbstim.connect("your_username")</code></pre>
+client = dbstim.connect("your_username")  # prompts only for password</code></pre>
         </div>
         <p>
-          For non-interactive scripts or custom server targets, instantiate <code>Client</code> directly using placeholder
-          values or environment variables (never commit real passwords to source control):
+          In scripts, pass credentials or environment variables to <code>Client</code> directly:
         </p>
         <div class="code-wrap">
           <pre><code class="language-python" data-snippet="connect-client">from dbstim import Client
@@ -576,24 +571,23 @@ client = dbstim.connect("your_username")</code></pre>
 with Client(
     "your_username",
     "your_password",
-    # Default origin is https://dbstimuli.com (HTTP allowed only for localhost)
-    url="https://dbstimuli.com",
-    timeout=120,  # per-request socket timeout in seconds (default: 120)
+    url="https://dbstimuli.com",  # HTTP is allowed only for localhost
+    timeout=120,
 ) as client:
     print(client)  # &lt;Client your_username at https://dbstimuli.com&gt;</code></pre>
         </div>
-        <ul>
-          <li><strong>In-memory credentials only:</strong> Session cookies and the CSRF token stay in memory on the <code>Client</code> instance and are cleared immediately by <code>client.close()</code>, exiting a <code>with client:</code> block, or an HTTP <code>401</code> response.</li>
-          <li><strong>Strict origin safety:</strong> Remote origins must use <code>https://</code> without embedded credentials, paths, queries, or fragments, and the HTTP transport never follows redirects.</li>
-        </ul>
+        <p style="margin-bottom: 0;">
+          Session cookies and the CSRF token stay in memory and are cleared by <code>client.close()</code>, leaving
+          <code>with client:</code>, or an HTTP <code>401</code>. Remote URLs must use <code>https://</code> without
+          embedded credentials, paths, or query strings, and the client never follows redirects.
+        </p>
       </section>
 
       <section class="card" id="metrics">
-        <h2>3. Metric Discovery &amp; Filtering</h2>
+        <h2>3. Filter by metric</h2>
         <p>
-          Call <code>client.metrics()</code> to inspect the catalog metrics you can filter on when designing an experiment.
-          Each item is a frozen <code>Metric(id, label, kind, unit, operators)</code> object whose <code>repr</code>
-          displays its human-readable comparison symbols:
+          <code>client.metrics()</code> lists the catalog metrics you can filter on when creating an experiment.
+          Each <code>Metric(id, label, kind, unit, operators)</code> shows its allowed comparison operators:
         </p>
         <div class="code-wrap">
           <pre><code class="language-python" data-snippet="metrics-discover">from dbstim import MetricFilter
@@ -601,7 +595,6 @@ with Client(
 metrics = client.metrics()
 for metric in metrics:
     print(repr(metric))
-# Example output:
 # &lt;Metric duration_seconds: Duration (number, seconds); operators &gt; &gt;=&gt;
 
 filters = [
@@ -611,20 +604,18 @@ filters = [
 ]</code></pre>
         </div>
         <ul>
-          <li><strong>Definitions, not per-clip rows:</strong> <code>client.metrics()</code> lists metric definitions and allowed operators; actual filtering happens server-side against the published SQLite metric index when you create an experiment.</li>
-          <li><strong>Operators:</strong> Numeric metrics accept <code>"&gt;="</code>, <code>"&lt;="</code>, <code>"&gt;"</code>, <code>"&lt;"</code>, <code>"=="</code> (or server codes <code>"gte"</code>, <code>"lte"</code>, <code>"gt"</code>, <code>"lt"</code>, <code>"eq"</code>). Boolean (<code>True</code>/<code>False</code>) metrics accept <code>"=="</code> and <code>"!="</code> (mapped to <code>"is"</code> and <code>"is_not"</code>; <code>"!="</code> is restricted to booleans).</li>
-          <li><strong>Intersection semantics:</strong> Multiple <code>MetricFilter</code> entries combine with logical <strong>AND</strong>. Clips with unknown (<code>NULL</code>) values fail active comparisons.</li>
-          <li><strong>Text search:</strong> <code>create_experiment(..., content="...", corpus="both")</code> searches clip text across <code>"captions"</code>, <code>"transcripts"</code>, or <code>"both"</code>.</li>
+          <li><strong>Operators:</strong> Numeric metrics accept <code>"&gt;="</code>, <code>"&lt;="</code>, <code>"&gt;"</code>, <code>"&lt;"</code>, and <code>"=="</code> (or <code>"gte"</code>, <code>"lte"</code>, <code>"gt"</code>, <code>"lt"</code>, <code>"eq"</code>). Boolean metrics accept <code>"=="</code> and <code>"!="</code> with <code>True</code> or <code>False</code> (<code>"!="</code> is only for booleans).</li>
+          <li><strong>Matching:</strong> Filters combine with <strong>AND</strong>, and clips with unknown (<code>NULL</code>) values do not match. Pass <code>content="..."</code> and <code>corpus="captions" | "transcripts" | "both"</code> to <code>create_experiment(...)</code> to filter by clip text as well. See <a href="metrics-and-filters.md">Metrics &amp; Filters</a> for how the server indexes and queries metrics.</li>
         </ul>
       </section>
 
       <section class="card" id="experiments">
-        <h2>4. Creating, Publishing &amp; Reopening Experiments</h2>
-        <h3>Creating a draft and publishing</h3>
+        <h2>4. Create, publish, and reopen experiments</h2>
+        <h3>Create and publish</h3>
         <p>
-          <code>client.create_experiment(...)</code> validates your design counts locally, queries the server to pin the current
-          catalog version, and saves a draft experiment. Calling <code>experiment.publish()</code> freezes every subject's
-          session, run, and trial assignments into a SHA-256-verified manifest:
+          <code>client.create_experiment(...)</code> checks your design counts and saves a draft on the server.
+          Call <code>experiment.publish()</code> to freeze each subject's sessions, runs, and trials before reading
+          <code>experiment.subjects</code>:
         </p>
         <div class="code-wrap">
           <pre><code class="language-python" data-snippet="experiment-create-publish">experiment = client.create_experiment(
@@ -637,7 +628,7 @@ filters = [
     repeats_per_run=0,
     shared_fraction=0.1,
     seed=1,
-    sampling="random",  # "random", "balanced", or "unique" YouTube channel sampling
+    sampling="random",  # "random", "balanced", or "unique" YouTube channels
     filters=[
         MetricFilter("duration_seconds", "&gt;=", 10),
         MetricFilter("duration_seconds", "&lt;=", 20),
@@ -646,109 +637,99 @@ filters = [
     corpus="both",      # "captions", "transcripts", or "both"
 )
 
-# Publish to freeze subject/session/run manifests before accessing experiment.subjects
 experiment.publish()
 summary = experiment.summary()
 print(summary["id"], summary["published"], summary["shared_fraction_realized"])</code></pre>
         </div>
         <ul>
-          <li><strong>Trial composition per run:</strong> Foils (second halves of split parent videos) and repeats count toward <code>trials_per_run</code>. Every run has <code>parents = trials_per_run - foils_per_run - repeats_per_run</code> initial parent presentations (requiring <code>parents &gt;= 1</code> and <code>max(foils_per_run, repeats_per_run) &lt;= parents</code>), consisting of <code>trials_per_run - 2*foils_per_run - repeats_per_run</code> full videos, <code>foils_per_run</code> first halves, <code>foils_per_run</code> complementary second-half foils, and <code>repeats_per_run</code> repeats.</li>
-          <li><strong>Scale limits:</strong> Up to <code>100</code> subjects and <code>50,000</code> total presentations (<code>subjects * sessions_per_subject * runs_per_session * trials_per_run</code>).</li>
-          <li><strong>Shared fraction rounding:</strong> <code>shared_fraction</code> (<code>0</code> to <code>1</code>) sets the share of parent videos every subject sees, rounded down to whole videos. If rounding changes the share, <code>create_experiment</code> issues a <code>UserWarning</code> and <code>experiment.summary()["shared_fraction_realized"]</code> reports the exact realized fraction.</li>
-          <li><strong>Publication requirement:</strong> Accessing <code>experiment.subjects</code> on an unpublished draft raises <code>ApiError("Publish the experiment before choosing subjects")</code>.</li>
+          <li><strong>Run composition:</strong> Foils (second halves of split parent clips) and repeats count toward <code>trials_per_run</code>. Each run presents <code>parents = trials_per_run - foils_per_run - repeats_per_run</code> parent clips (<code>parents &gt;= 1</code>, <code>max(foils_per_run, repeats_per_run) &lt;= parents</code>)—<code>parents - foils_per_run</code> full clips and <code>foils_per_run</code> first halves—plus <code>foils_per_run</code> second-half foils and <code>repeats_per_run</code> repeats.</li>
+          <li><strong>Limits and shared clips:</strong> Up to <code>100</code> subjects and <code>50,000</code> total presentations. <code>shared_fraction</code> (<code>0</code> to <code>1</code>) sets the share of parent clips every subject sees, rounded down to whole videos (warning on rounding and reporting the exact value in <code>summary["shared_fraction_realized"]</code>).</li>
         </ul>
 
-        <h3>Reopening an existing experiment</h3>
+        <h3>Reopen an existing experiment</h3>
         <p>
-          Each call to <code>create_experiment(...)</code> creates a new experiment record on the server even if the name was used before.
-          <code>client.experiment(name)</code> opens the unique match (preferring its latest published revision), or raises a
-          <code>ValueError</code> listing all matching revision IDs and creation timestamps so you can disambiguate with <code>id=</code>:
+          Every <code>create_experiment(...)</code> call creates a new experiment on the server, even if the name already exists.
+          Reopen an existing one with <code>client.experiment(name)</code>—if multiple experiments share that name, the
+          <code>ValueError</code> lists their revision IDs so you can pass <code>id=</code>:
         </p>
         <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="experiment-reopen"># List all experiments owned by your account
-all_experiments = client.experiments()
+          <pre><code class="language-python" data-snippet="experiment-reopen">all_experiments = client.experiments()
 
-# Reopen by exact name when unambiguous
 experiment = client.experiment("Memory demo")
-
-# Or reopen a specific revision ID directly (required if multiple experiments share a name)
-experiment = client.experiment(id="experiment-1")</code></pre>
+experiment = client.experiment(id="experiment-1")  # disambiguate duplicate names</code></pre>
         </div>
       </section>
 
       <section class="card" id="journeys">
-        <h2>5. Two Separate Journeys: Media Download vs. Tracked Presentation</h2>
+        <h2>5. Download media vs. present a session</h2>
         <p>
-          <code>dbstim</code> separates <strong>fetching/previewing video files</strong> from <strong>running a tracked participant session</strong>.
-          Pre-staging or previewing videos never claims a session or records participant progress on the server.
+          <code>dbstim</code> separates <strong>downloading video files</strong> from <strong>running a tracked session</strong>.
+          Downloading or previewing files never claims a session or changes participant progress.
         </p>
 
         <div class="split-grid">
           <div class="panel">
-            <h3>Journey A: Shortest Media-Download Path (Untracked)</h3>
+            <h3>A. Download videos ahead of time (untracked)</h3>
             <p>
-              Use <code>session.download()</code> in a setup script or notebook before the participant arrives.
-              It downloads and verifies every MP4 in the session into your per-user cache (<code>~/.cache/dbstim</code>)
-              without calling <code>start()</code> or modifying server progress:
+              Run <code>session.download()</code> in a setup script or notebook before the participant arrives.
+              It downloads and verifies every MP4 for the session into <code>~/.cache/dbstim</code>:
             </p>
             <div class="code-wrap">
               <pre><code class="language-python" data-snippet="journey-download">experiment = client.experiment("Memory demo")
 session = experiment.subjects[0].sessions[0]
 
-# Downloads &amp; verifies all session MP4s into ~/.cache/dbstim
 cache_folder = session.download()
 
-# Preview or inspect a file path without starting the session
 run = session.next_run()
 if run is not None:
     first_mp4 = run.media(run.trials[0], mode="local")</code></pre>
             </div>
             <ul style="font-size: 0.9rem; margin-bottom: 0;">
-              <li><strong>Shared across directories:</strong> Because the default cache lives under <code>$XDG_CACHE_HOME/dbstim</code> or <code>~/.cache/dbstim</code> (partitioned by origin hash, experiment ID, subject ID, manifest SHA-256, and session ID), a download from <code>notebooks/api.ipynb</code> is automatically reused by your task program running from any folder.</li>
-              <li><strong>Custom folder:</strong> Pass <code>session.download("/path/on/main/disk")</code> or <code>subject.session("session-001", directory="/path/on/main/disk")</code>. A custom folder is used as given, so give each session its own folder. The target filesystem must support hard links (drives formatted as exFAT or FAT raise an <code>OSError</code>).</li>
+              <li><strong>Shared cache:</strong> Files live under <code>$XDG_CACHE_HOME/dbstim</code> or <code>~/.cache/dbstim</code>, so task scripts in any folder reuse what you already downloaded.</li>
+              <li><strong>Custom folder:</strong> <code>session.download("/path/to/dir")</code> or <code>subject.session("session-001", directory="/path/to/dir")</code> uses that directory as given—give each session its own folder on a filesystem that supports hard links (not exFAT or FAT).</li>
             </ul>
           </div>
 
           <div class="panel">
-            <h3>Journey B: Tracked Session / Run / Trial Loop</h3>
+            <h3>B. Run a tracked session</h3>
             <p>
-              When presenting to a participant, enter <code>with session:</code> and iterate through
-              <code>session.next_run()</code> and <code>run.next_trial()</code>. Your task function (<code>present(path)</code>)
-              renders the video and returns a plain-JSON result dictionary:
+              Wrap presentation in <code>with session:</code> and step through <code>session.next_run()</code> and
+              <code>run.next_trial()</code>. Your <code>present(path)</code> function plays the video and returns a
+              plain-JSON result dictionary (or <code>None</code>):
             </p>
             <div class="code-wrap">
               <pre><code class="language-python" data-snippet="journey-present">session = experiment.subjects[0].sessions[0]
 
-with session:  # calls session.start(); finishes on exit
+with session:  # claims the session and finishes it on exit
     while (run := session.next_run()) is not None:
         while (trial := run.next_trial()) is not None:
-            path = run.media(trial)  # verified local Path
+            path = run.media(trial)
             run.record(trial, "started")
-            result = present(path)   # your PGL / PsychoPy renderer
+            result = present(path)  # your PGL or PsychoPy function
             run.record(trial, "completed", result=result)</code></pre>
             </div>
             <ul style="font-size: 0.9rem; margin-bottom: 0;">
-              <li><strong>Automatic session outcome:</strong> Exiting <code>with session:</code> calls <code>session.finish(status)</code> with <code>"completed"</code> when every trial in the session is <code>"completed"</code>, <code>"interrupted"</code> if you stopped early (including Ctrl-C) or abandoned a trial, or <code>"failed"</code> if an exception was raised.</li>
-              <li><strong>Download first for tight timing:</strong> The default <code>run.media(trial)</code> (<code>mode="cache"</code>) downloads any file that is not cached yet, inside your loop. Call <code>session.download()</code> beforehand and use <code>mode="local"</code> to guarantee the loop never downloads.</li>
-              <li><strong>Your code reports presentation:</strong> <code>dbstim</code> records whatever <code>present(path)</code> returns; it cannot observe the screen. With PGL, a <code>play()</code> call returning does not by itself prove the frames were displayed.</li>
-              <li><strong>Pre-sliced segments:</strong> Every <code>Trial</code> has <code>trial_id</code>, <code>stimulus_id</code>, <code>position</code> (1-based within the run), <code>role</code> (<code>"parent"</code>, <code>"repeat"</code>, or <code>"foil"</code>), <code>media_type="video"</code>, and <code>segment</code> (<code>Segment(start_seconds, end_seconds)</code> or <code>None</code>). Server-rendered halves and foils play from time zero of the downloaded MP4.</li>
+              <li><strong>Session outcome:</strong> Leaving <code>with session:</code> finishes the session as <code>"completed"</code> when every trial is completed, <code>"interrupted"</code> if you stop early (including Ctrl-C) or abandon a trial, or <code>"failed"</code> if an exception escapes the block.</li>
+              <li><strong>Your code verifies playback:</strong> <code>dbstim</code> only records what <code>present(path)</code> returns; it cannot see the screen. In PGL, <code>play()</code> returning does not prove frames were shown—check frame timestamps before recording <code>"completed"</code>.</li>
+              <li><strong>Trial fields:</strong> Each <code>Trial</code> has <code>trial_id</code>, <code>stimulus_id</code>, <code>position</code> (1-based), <code>role</code> (<code>"parent"</code>, <code>"repeat"</code>, or <code>"foil"</code>), <code>media_type="video"</code>, and <code>segment</code> (<code>Segment(start_seconds, end_seconds)</code> or <code>None</code>). Split halves and foils are already trimmed to play from time zero.</li>
             </ul>
           </div>
         </div>
 
-        <h3>Media resolution modes (<code>run.media(trial, mode=...)</code>)</h3>
+        <h3>Media modes (<code>run.media(trial, mode=...)</code>)</h3>
         <ul>
-          <li><code>mode="cache"</code> <em>(default)</em>: Returns the verified local <code>Path</code> if already in the cache (checking SHA-256, byte size, and manifest receipt), or downloads and verifies it on demand.</li>
-          <li><code>mode="local"</code>: Strictly offline check—returns the verified local <code>Path</code> if already downloaded, or immediately raises <code>ApiError</code> without making any network request. Ideal inside time-critical presentation loops after <code>session.download()</code>.</li>
-          <li><code>mode="remote"</code>: Requests a temporary 5-minute streaming URL (<code>https://dbstimuli.com/api/v1/media-access/...</code>) from the server without writing to local disk.</li>
+          <li><code>mode="cache"</code> <em>(default)</em>: Returns the verified local <code>Path</code> if cached, or downloads it on the spot. Calling <code>run.media(trial)</code> without pre-downloading fetches missing video inside your trial loop.</li>
+          <li><code>mode="local"</code>: Uses only an already-downloaded file and raises <code>ApiError</code> immediately if it is missing. Call <code>session.download()</code> before <code>with session:</code> and pass <code>mode="local"</code> inside the loop so presentation never waits on a download.</li>
+          <li><code>mode="remote"</code>: Requests a 5-minute streaming URL from the server without saving to disk; your player streams over the network during playback.</li>
         </ul>
       </section>
 
       <section class="card" id="timing">
-        <h2>6. HTTP vs. Local Operations &amp; Timing Consequences</h2>
+        <h2>6. Network vs. local calls</h2>
         <p>
-          All network calls in <code>dbstim</code> are synchronous. Understanding which calls contact the server versus which
-          inspect already-loaded memory or local disk lets you keep stimulus onset timing tight in PGL or PsychoPy.
+          Every network call in <code>dbstim</code> is synchronous. Keep server requests between trials—or before the
+          session—so they never block frame rendering. See <a href="server-to-local-flow.md">Server-to-Local Flow</a>
+          for the full request sequence.
         </p>
         <div class="table-wrap">
           <table>
@@ -756,49 +737,49 @@ with session:  # calls session.start(); finishes on exit
               <tr>
                 <th>Operation</th>
                 <th>I/O Type</th>
-                <th>What Happens &amp; Timing Consequence</th>
+                <th>Behavior &amp; Timing</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td><code>connect()</code>, <code>Client(...)</code>, <code>client.metrics()</code>, <code>client.experiments()</code>, <code>client.experiment(...)</code>, <code>client.create_experiment(...)</code>, <code>experiment.publish()</code>, <code>experiment.summary()</code></td>
                 <td><span class="pill http">HTTP</span></td>
-                <td>Synchronous HTTPS request(s) to <code>dbstimuli.com</code>. Call during experiment setup or startup, never during stimulus presentation.</td>
+                <td>Synchronous HTTPS requests. Run during setup or startup.</td>
               </tr>
               <tr>
                 <td><code>experiment.subjects</code></td>
                 <td><span class="pill http">HTTP (1st)</span> <span class="pill local">Local (cached)</span></td>
-                <td>First access fetches the published experiment document containing all subject manifests; subsequent accesses on the same <code>Experiment</code> instance return the cached tuple immediately. (Calling <code>experiment.subject(id)</code> directly fetches <code>.../manifest</code> over HTTP.)</td>
+                <td>First access fetches all subject manifests; later accesses on the same <code>Experiment</code> reuse memory (<code>experiment.subject(id)</code> always fetches over HTTP).</td>
               </tr>
               <tr>
                 <td><code>subject.sessions</code>, <code>subject.session(id)</code>, <code>subject.session_ids</code>, <code>session.run_ids</code>, <code>session.run("run-001")</code>, <code>run.trials</code>, <code>trial.*</code>, <code>repr(...)</code></td>
                 <td><span class="pill local">Local (Memory)</span></td>
-                <td>Zero network or disk I/O. Reads parsed, hash-verified manifest dataclasses already in memory.</td>
+                <td>Reads manifest data already in memory; no disk or network I/O.</td>
               </tr>
               <tr>
                 <td><code>session.download()</code></td>
                 <td><span class="pill http">HTTP + Disk</span></td>
-                <td>Downloads any missing MP4s in the session and verifies SHA-256 checksums for all session files. Run <strong>before</strong> starting your task loop.</td>
+                <td>Downloads missing MP4s and verifies SHA-256 checksums for the session. Run before <code>with session:</code>.</td>
               </tr>
               <tr>
-                <td><code>run.media(trial, mode="local")</code><br><em>(or <code>mode="cache"</code> after <code>session.download()</code>)</em></td>
+                <td><code>run.media(trial, mode="local")</code><br><em>(or <code>mode="cache"</code> when cached)</em></td>
                 <td><span class="pill local">Local (Disk SHA-256)</span></td>
-                <td>Zero network I/O. Hashes the local MP4 file with SHA-256 and checks its size and JSON receipt on disk. Call before trial onset to obtain the file path before flipping your first video frame.</td>
+                <td>No network I/O, but hashes the full MP4 file with SHA-256 on every call to verify its receipt. Resolve the path before drawing your first frame.</td>
               </tr>
               <tr>
                 <td><code>run.media(trial, mode="remote")</code></td>
                 <td><span class="pill http">HTTP</span></td>
-                <td><code>POST .../media-access</code> to mint a 5-minute streaming URL.</td>
+                <td>Requests a 5-minute streaming URL (<code>POST</code>); the player then streams over the network during playback.</td>
               </tr>
               <tr>
                 <td><code>session.next_run()</code>, <code>session.run("latest")</code>, <code>run.next_trial()</code>, <code>session.unconfirmed</code>, <code>session.abandoned</code>, <code>session.results</code>, <code>run.results</code></td>
-                <td><span class="pill http">HTTP GET</span></td>
-                <td>Each call fetches current server session state (<code>GET .../sessions/{id}</code>) and verifies the manifest SHA-256. Call between trials, not inside a frame-rendering loop. Reads are <strong>not retried</strong>: a dropped connection raises <code>ApiError</code>, and leaving <code>with session:</code> on that exception finishes the session as <code>"failed"</code>.</td>
+                <td><span class="pill http">HTTP GET (No retry)</span></td>
+                <td>Fetches session state from the server on <strong>every call or property access</strong>. Reads are <strong>not retried</strong>: a dropped read raises <code>ApiError</code>, and leaving <code>with session:</code> on that error marks the session <code>"failed"</code>.</td>
               </tr>
               <tr>
                 <td><code>session.start()</code>, <code>session.finish()</code>, <code>run.record(...)</code>, <code>session.record(...)</code></td>
-                <td><span class="pill http">HTTP POST (Retryable)</span></td>
-                <td>Sends a deduplicated command to the server. On connection failure or HTTP <code>500/502/503/504</code>, automatically retries up to 3 times with <strong>0.5s, 1.0s, and 2.0s</strong> pauses (up to ~3.5s plus socket timeouts). Call immediately before/after presentation, outside your frame loop.</td>
+                <td><span class="pill http">HTTP POST (Retried)</span></td>
+                <td>Sends an idempotent write. On connection errors or HTTP <code>500/502/503/504</code>, retries up to 3 times (<code>0.5s</code>, <code>1.0s</code>, <code>2.0s</code> pauses) with the same request ID so events are never duplicated.</td>
               </tr>
             </tbody>
           </table>
@@ -806,39 +787,40 @@ with session:  # calls session.start(); finishes on exit
       </section>
 
       <section class="card" id="recovery">
-        <h2>7. Recording Results &amp; Honest Interruption / Recovery</h2>
-
-        <h3>Plain-JSON result validation</h3>
+        <h2>7. Results and recovery</h2>
         <p>
-          <code>run.record(trial, status, result=...)</code> validates <code>result</code> locally before sending any network request.
-          <code>result</code> must be <code>None</code> or a plain JSON <code>dict</code> containing only <code>str</code>, <code>int</code>,
-          <code>float</code> (finite only—no <code>NaN</code> or <code>inf</code>), <code>bool</code>, <code>None</code>, <code>list</code>,
-          and <code>dict</code>. Convert NumPy scalars with <code>int(x)</code> or <code>float(x)</code>, and use <code>None</code> when a
-          participant gives no response:
+          See <a href="recovery.md">Recovering a Session</a> for the complete recovery reference.
+        </p>
+
+        <h3>Result payloads</h3>
+        <p>
+          <code>run.record(trial, status, result=...)</code> checks <code>result</code> before sending: it must be
+          <code>None</code> or a plain JSON <code>dict</code> (<code>str</code>, <code>int</code>, finite <code>float</code>,
+          <code>bool</code>, <code>None</code>, <code>list</code>, <code>dict</code>). Convert NumPy scalars with
+          <code>int(x)</code> or <code>float(x)</code>, and pass <code>None</code> when there is no response:
         </p>
         <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="results-validation"># Valid plain-JSON result payload (use int()/float() for numpy scalars, None for no response)
-run.record(trial, "completed", result={"rt_ms": int(412), "choice": "left", "confidence": None})
+          <pre><code class="language-python" data-snippet="results-validation">run.record(trial, "completed", result={"rt_ms": int(412), "choice": "left", "confidence": None})
 
-# Read back server-recorded results at any time, including after all trials are finished
 all_results = session.results
 current_run_results = run.results</code></pre>
         </div>
-
-        <h3>Resolving an interrupted (unconfirmed) trial</h3>
         <p>
-          Every started trial ends in exactly one terminal state: <code>"completed"</code> (shown to the end) or
-          <code>"abandoned"</code> (cut short by Ctrl-C, a crash, equipment trouble, or participant withdrawal).
-          <strong>Neither is ever replayed automatically.</strong>
-          If a program stops after <code>record(trial, "started")</code> without recording an ending, that trial is listed in
-          <code>session.unconfirmed</code> and blocks <code>run.next_trial()</code> across the entire session until you resolve it:
+          <code>session.results</code> and <code>run.results</code> list only trials recorded with a non-<code>None</code>
+          result dict; <code>session.abandoned</code> lists every abandoned trial even when <code>result=None</code>.
+        </p>
+
+        <h3>Interrupted (unconfirmed) trials</h3>
+        <p>
+          Every started trial ends once as <code>"completed"</code> (shown to the end) or <code>"abandoned"</code> (cut short);
+          <strong>neither is ever replayed</strong>. If a process stops after <code>record(trial, "started")</code>, that trial
+          stays in <code>session.unconfirmed</code> and blocks <code>run.next_trial()</code> across the session until you resolve it:
         </p>
         <div class="code-wrap">
           <pre><code class="language-python" data-snippet="recovery-unconfirmed">session = experiment.subjects[0].sessions[0]
 
 with session:
-    # Resolve any trial left unconfirmed by an earlier interruption:
-    # Use "completed" ONLY if the participant actually saw the video to the end.
+    # Record "completed" only if the participant saw the full video
     for trial in session.unconfirmed:
         session.record(trial, "abandoned", result={"reason": "stopped mid-trial"})
 
@@ -849,40 +831,28 @@ with session:
             result = present(path)
             run.record(trial, "completed", result=result)
 
-# session.abandoned lists every abandoned Trial (even if recorded with result=None)
-# session.results lists only trials where a non-None result dict was recorded
 print(session.abandoned, session.results)</code></pre>
         </div>
         <div class="callout warn">
-          <strong>Sessions with abandoned trials finish as <code>"interrupted"</code></strong>
-          Because an abandoned trial was not completed, leaving <code>with session:</code> marks the session
-          <code>"interrupted"</code> even after all remaining trials in every run have been presented. Calling
-          <code>session.finish("completed")</code> on a session with abandoned trials is rejected by the server (HTTP 409).
+          <strong>Abandoned trials mark the session <code>"interrupted"</code></strong>
+          Even after all remaining trials complete, a session with an abandoned trial finishes as <code>"interrupted"</code>;
+          calling <code>session.finish("completed")</code> fails with HTTP <code>409</code>.
         </div>
 
-        <h3>Dropped connections &amp; bounded command retries</h3>
+        <h3>Failed writes and session takeover</h3>
         <p>
-          <code>start()</code>, <code>finish()</code>, and <code>record()</code> attach a unique <code>request_id</code> and
-          <code>writer_id</code>. If a connection drops or the server returns HTTP <code>500</code>, <code>502</code>,
-          <code>503</code>, or <code>504</code>, <code>dbstim</code> resends the exact same payload up to 3 times (pausing
-          <code>0.5s</code>, <code>1.0s</code>, and <code>2.0s</code>). The server deduplicates by <code>request_id</code>,
-          so a trial or session event is never recorded twice. Client errors (<code>4xx</code>) are never retried.
+          If a write (<code>start()</code>, <code>finish()</code>, or <code>record()</code>) still fails after its 3 automatic
+          retries, <code>dbstim</code> keeps that command pending on the <code>Session</code> object and blocks
+          <code>next_run()</code>, <code>next_trial()</code>, and <code>finish()</code> until you repeat the same call on that
+          instance (<code>4xx</code> errors are not retried).
         </p>
         <p>
-          If all 4 attempts fail, <code>dbstim</code> keeps that command pending on the <code>Session</code> instance and blocks
-          <code>next_run()</code>, <code>next_trial()</code>, and <code>finish()</code> until you repeat that exact same call
-          on the same <code>session</code> / <code>run</code> object.
-        </p>
-
-        <h3>Taking over from a crashed presenter</h3>
-        <p>
-          If a previous task process crashed before exiting <code>with session:</code>, its presenter claim remains active on the
-          server and a new <code>session.start()</code> raises <code>ApiError</code> (<code>HTTP 409: Another presenter owns this session</code>).
-          Once you have verified that the previous program is no longer running, claim the session explicitly with
-          <code>takeover=True</code>:
+          If the script exited before leaving <code>with session:</code>, a new <code>session.start()</code> raises
+          <code>ApiError</code> (<code>HTTP 409: Another presenter owns this session</code>). After confirming the old process
+          has stopped, claim the session with <code>takeover=True</code>:
         </p>
         <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="recovery-takeover"># Only after confirming the previous task process has stopped:
+          <pre><code class="language-python" data-snippet="recovery-takeover"># Only after confirming the previous process has stopped:
 session.start(takeover=True)
 with session:
     for trial in session.unconfirmed:
@@ -897,36 +867,29 @@ with session:
       </section>
 
       <section class="card" id="limitations">
-        <h2>8. Current Scope, Upgrading &amp; Verification Limitations</h2>
+        <h2>8. Limitations and upgrading</h2>
         <ul>
           <li>
-            <strong>Live server-backed progress (no offline event sync or portable export bundles):</strong>
-            <code>dbstim</code> caches video files locally in <code>~/.cache/dbstim</code>, but experiment creation, session claims
-            (<code>start</code>/<code>finish</code>), progress queries (<code>next_run</code>/<code>next_trial</code>), and trial event
-            recording (<code>record</code>) always communicate with the server over HTTPS. Offline event queuing/synchronization
-            and standalone portable experiment exports are not implemented.
+            <strong>Live server required for progress:</strong>
+            Videos cache on disk, but creating experiments, claiming sessions, reading progress, and recording trials
+            require HTTPS access to the server. Offline event queuing and standalone export bundles are not supported.
           </li>
           <li>
-            <strong>Server requirement for <code>"abandoned"</code> trial outcomes:</strong>
-            Recording <code>session.record(trial, "abandoned")</code> requires the server to run
-            <code>dbp-dataset-browser</code> revision <code>492a894</code> or later with its abandoned-outcomes database migration
-            applied. If a deployed server predates that upgrade, calling <code>record(trial, "abandoned")</code> raises
-            <code>ApiError</code> (<code>HTTP 400: ... This server may predate abandoned trials; ask its operator to upgrade it</code>)
-            and leaves the trial unconfirmed without changing server state.
+            <strong>Server support for <code>"abandoned"</code>:</strong>
+            Recording <code>"abandoned"</code> requires <code>dbp-dataset-browser</code> <code>492a894</code> or later with its
+            database migration applied. On older servers, <code>record(trial, "abandoned")</code> raises <code>ApiError</code>
+            (<code>HTTP 400</code>) and leaves the trial unconfirmed.
           </li>
           <li>
-            <strong>Upgrading from <code>dbstim</code> 0.4 to 0.5:</strong>
-            <code>dbstim</code> 0.4 stored downloaded media in a working-directory <code>.dbstim</code> folder and could not advance past
-            an abandoned trial. Version 0.5 uses the shared per-user cache (<code>~/.cache/dbstim</code>) and ignores old
-            <code>.dbstim</code> folders (which you can delete when convenient).
+            <strong>Upgrading from 0.4 to 0.5:</strong>
+            Version 0.4 cached videos in <code>./.dbstim</code> and could not advance past an abandoned trial. Version 0.5
+            uses <code>~/.cache/dbstim</code> and ignores old <code>.dbstim</code> folders, which you can delete.
           </li>
           <li>
-            <strong>Verification evidence boundary:</strong>
-            All examples and behaviors documented in this guide are verified against the <code>dbstim</code> <code>v0.5.0</code>
-            source and local HTTP test fixtures (<code>tests/test_dstim.py</code>, <code>tests/test_usability.py</code>,
-            <code>tests/test_models_and_cache.py</code>, <code>tests/test_transport.py</code>). Automated tests do not create
-            experiments or mutate state on the live <code>dbstimuli.com</code> production server; live server feature availability
-            depends on the operator's currently deployed server revision and database state.
+            <strong>Verification scope:</strong>
+            All examples and behaviors in this guide were verified against <code>dbstim</code> <code>v0.5.0</code> and local
+            HTTP test fixtures, without creating experiments or modifying state on the live <code>dbstimuli.com</code> server.
+            Production behavior depends on the server revision and database migrations currently deployed.
           </li>
         </ul>
       </section>
