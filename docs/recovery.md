@@ -11,9 +11,9 @@ Neither ending is presented again. A started trial with no ending is
 
 ## A program stopped mid-trial
 
-`run.next_trial()` then names the trial, for example `trial-000002 (run-001,
-position 2) was started but neither completed nor abandoned`. Resolve it and
-continue with the usual loop:
+`run.next_trial()` then raises an error naming the trial, for example
+`trial-000002 (run-001, position 2) was started but neither completed nor
+abandoned`. Record its ending and continue the usual loop:
 
 ```python
 with session:
@@ -23,7 +23,7 @@ with session:
         ...  # the next trial follows the abandoned one
 ```
 
-Record `completed` only for a trial the participant really saw. A session with an
+Record `completed` only for a trial the participant saw to the end. A session with an
 abandoned trial finishes `interrupted`, never `completed`. `session.abandoned`
 lists every abandoned trial, even one recorded without a result;
 `session.results` holds only the results you sent, each with its status.
@@ -62,8 +62,9 @@ Never take over a session that another computer is still presenting.
 Verified videos live in `$XDG_CACHE_HOME/dbstim` or `~/.cache/dbstim`, separated
 by server, experiment, subject, manifest and session. Every program reuses them
 after checking size, SHA-256 and identity; a changed file is refused, not
-replaced. Disk failures are reported as disk errors: drives that cannot hard-link
-files, such as exFAT, need another folder via `session.download(directory)`.
+replaced. Disk failures raise disk errors, not connection errors; drives that
+cannot hard-link files, such as exFAT, need `session.download(directory)` on
+another drive.
 
 ## Upgrading from 0.4
 

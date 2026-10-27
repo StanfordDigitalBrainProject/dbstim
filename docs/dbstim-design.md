@@ -1,6 +1,6 @@
 # dbstim API design
 
-Status: historical 2026-10-20 design; current API: api-classes.md.
+Status: historical 2026-10-20 design; current API: [api-classes.md](api-classes.md).
 
 ## Purpose
 

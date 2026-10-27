@@ -163,10 +163,10 @@ svg .unconf { fill: none; stroke: var(--disk); stroke-width: 1.5; stroke-dasharr
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><marker id="ah-http" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-http" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ah-local" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-local" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ah-disk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-disk" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ah-yours" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-yours" d="M0 0 L10 5 L0 10 z"/></marker></defs></svg>
 <header class="top">
   <h1>dbstim API map</h1>
-  <p class="lede">The public interface of the <code>dbstim</code> Python package as it is today: what each object is,
-    which calls go over the network, which stay on your computer, and what happens when a session is interrupted.</p>
-  <p class="meta">Describes dbstim <strong>0.5.0</strong> (<code>src/dbstim/</code>). Single self-contained file: no
-    network, server or install needed to read it. A text version with Mermaid diagrams is
+  <p class="lede">What each object in the <code>dbstim</code> Python package does, which calls go over the network,
+    which stay on your computer, and what happens when a session is interrupted.</p>
+  <p class="meta">Describes dbstim <strong>0.5.0</strong> (<code>src/dbstim/</code>). This one file works offline, with no
+    server or install. A text version with Mermaid diagrams is
     <a href="api-interface.md">api-interface.md</a>.</p>
   <ul class="legend" aria-label="Badge legend">
     <li><span class="b http">HTTP</span> sends a request to dbstimuli.com</li>
@@ -194,7 +194,7 @@ svg .unconf { fill: none; stroke: var(--disk); stroke-width: 1.5; stroke-dasharr
 
 <section id="model" aria-labelledby="model-h">
   <h2 id="model-h"><span class="n">1</span>Mental model</h2>
-  <p>Every object is reached from the one before it. A <code>Client</code> creates or opens an
+  <p>You reach each object from the one before it. A <code>Client</code> creates or opens an
     <code>Experiment</code>; publishing it freezes which trials each subject sees, in which session and run. Presentation progress is stored on the server, never in local files.</p>
   <figure>
     <svg class="chain" viewBox="0 0 960 250" role="img" aria-labelledby="chain-t chain-d"><title id="chain-t">How you reach each object</title><desc id="chain-d">Client leads to Experiment, Subject, Session, Run and Trial. Client and Experiment are the design you create and publish. Subject through Trial are the frozen assignment. Session progress is stored on the server.</desc><rect class="obj" x="20" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="90.0" y="60" text-anchor="middle">Client</text><text class="lbl mono sm" x="90.0" y="82" text-anchor="middle">dbstim.connect()</text><rect class="obj" x="176" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="246.0" y="60" text-anchor="middle">Experiment</text><text class="lbl mono sm" x="246.0" y="82" text-anchor="middle">create_experiment()</text><text class="lbl mono sm" x="246.0" y="97" text-anchor="middle">or experiment(name)</text><line class="ln-local" x1="161" y1="73.0" x2="173" y2="73.0" marker-end="url(#ah-local)"/><rect class="obj" x="332" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="402.0" y="60" text-anchor="middle">Subject</text><text class="lbl mono sm" x="402.0" y="82" text-anchor="middle">experiment.subjects</text><text class="lbl mono sm" x="402.0" y="97" text-anchor="middle">or subject(id)</text><line class="ln-local" x1="317" y1="73.0" x2="329" y2="73.0" marker-end="url(#ah-local)"/><rect class="obj" x="488" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="558.0" y="60" text-anchor="middle">Session</text><text class="lbl mono sm" x="558.0" y="82" text-anchor="middle">subject.sessions[i]</text><text class="lbl mono sm" x="558.0" y="97" text-anchor="middle">or session(id)</text><line class="ln-local" x1="473" y1="73.0" x2="485" y2="73.0" marker-end="url(#ah-local)"/><rect class="obj" x="644" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="714.0" y="60" text-anchor="middle">Run</text><text class="lbl mono sm" x="714.0" y="82" text-anchor="middle">session.next_run()</text><text class="lbl mono sm" x="714.0" y="97" text-anchor="middle">or run(id)</text><line class="ln-local" x1="629" y1="73.0" x2="641" y2="73.0" marker-end="url(#ah-local)"/><rect class="obj" x="800" y="34" width="140" height="78" rx="10"/><text class="obj-name" x="870.0" y="60" text-anchor="middle">Trial</text><text class="lbl mono sm" x="870.0" y="82" text-anchor="middle">run.next_trial()</text><text class="lbl mono sm" x="870.0" y="97" text-anchor="middle">or run.trials</text><line class="ln-local" x1="785" y1="73.0" x2="797" y2="73.0" marker-end="url(#ah-local)"/><path class="br-http" d="M20 126 v10 H316 v-10"/><text class="br-txt" x="168.0" y="156" text-anchor="middle">Design</text><text class="lbl" x="168.0" y="173" text-anchor="middle">filters, counts, seed; publish() freezes it</text><path class="br-local" d="M332 126 v10 H940 v-10"/><text class="br-txt" x="636.0" y="156" text-anchor="middle">Assignment</text><text class="lbl" x="636.0" y="173" text-anchor="middle">frozen at publish; each subject’s manifest is SHA-256 verified</text><rect class="band" x="332" y="196" width="588" height="38" rx="8"/><text class="lbl" x="636" y="220" text-anchor="middle">Progress lives on the server: start() · record(trial, status) · finish()</text></svg>
@@ -272,7 +272,7 @@ folder = session.download() # verified .mp4 files</code></pre>
 
 <section id="tracked" aria-labelledby="tracked-h">
   <h2 id="tracked-h"><span class="n">3</span>Tracked presentation</h2>
-  <p>A separate lifecycle, used inside your presentation program. Each trial is reported twice: once when it
+  <p>This part runs inside your presentation program. Each trial is reported twice: once when it
     starts and once with its ending. The server, not dbstim, decides what comes next.</p>
   <div class="split">
 <pre><code>with session:  # start() now, finish() at the end
@@ -396,7 +396,7 @@ with session:
     <li><strong>Verified on arrival:</strong> type <code>video/mp4</code>, declared size (at most 4 GiB) and the
       server's SHA-256, written to a temporary file and hard-linked into place so no file is ever overwritten.</li>
     <li><strong>Verified on every use:</strong> <code>run.media()</code> re-hashes a cached file against its receipt
-      before returning it, so it costs a read of the file even with no request.</li>
+      before returning it, so each call reads the whole file even when it sends no request.</li>
     <li><strong>Another folder:</strong> <code>session.download(directory)</code> or
       <code>subject.session(id, directory=…)</code>. A later program must pass the same directory to find those files.</li>
     <li>Deleting files never changes server progress, and downloading never records any.</li>
