@@ -704,7 +704,7 @@ if run is not None:
             </div>
             <ul style="font-size: 0.9rem; margin-bottom: 0;">
               <li><strong>Shared across directories:</strong> Because the default cache lives under <code>$XDG_CACHE_HOME/dbstim</code> or <code>~/.cache/dbstim</code> (partitioned by origin hash, experiment ID, subject ID, manifest SHA-256, and session ID), a download from <code>notebooks/api.ipynb</code> is automatically reused by your task program running from any folder.</li>
-              <li><strong>Custom folder:</strong> Pass <code>session.download("/path/on/main/disk")</code> or <code>subject.session("session-001", directory="/path/on/main/disk")</code>. Note that the target filesystem must support hard links (drives formatted as exFAT or FAT raise an <code>OSError</code>).</li>
+              <li><strong>Custom folder:</strong> Pass <code>session.download("/path/on/main/disk")</code> or <code>subject.session("session-001", directory="/path/on/main/disk")</code>. A custom folder is used as given, so give each session its own folder. The target filesystem must support hard links (drives formatted as exFAT or FAT raise an <code>OSError</code>).</li>
             </ul>
           </div>
 
@@ -728,6 +728,8 @@ with session:  # calls session.start(); finishes on exit
             </div>
             <ul style="font-size: 0.9rem; margin-bottom: 0;">
               <li><strong>Automatic session outcome:</strong> Exiting <code>with session:</code> calls <code>session.finish(status)</code> with <code>"completed"</code> when every trial in the session is <code>"completed"</code>, <code>"interrupted"</code> if you stopped early (including Ctrl-C) or abandoned a trial, or <code>"failed"</code> if an exception was raised.</li>
+              <li><strong>Download first for tight timing:</strong> The default <code>run.media(trial)</code> (<code>mode="cache"</code>) downloads any file that is not cached yet, inside your loop. Call <code>session.download()</code> beforehand and use <code>mode="local"</code> to guarantee the loop never downloads.</li>
+              <li><strong>Your code reports presentation:</strong> <code>dbstim</code> records whatever <code>present(path)</code> returns; it cannot observe the screen. With PGL, a <code>play()</code> call returning does not by itself prove the frames were displayed.</li>
               <li><strong>Pre-sliced segments:</strong> Every <code>Trial</code> has <code>trial_id</code>, <code>stimulus_id</code>, <code>position</code> (1-based within the run), <code>role</code> (<code>"parent"</code>, <code>"repeat"</code>, or <code>"foil"</code>), <code>media_type="video"</code>, and <code>segment</code> (<code>Segment(start_seconds, end_seconds)</code> or <code>None</code>). Server-rendered halves and foils play from time zero of the downloaded MP4.</li>
             </ul>
           </div>
@@ -790,7 +792,7 @@ with session:  # calls session.start(); finishes on exit
               <tr>
                 <td><code>session.next_run()</code>, <code>session.run("latest")</code>, <code>run.next_trial()</code>, <code>session.unconfirmed</code>, <code>session.abandoned</code>, <code>session.results</code>, <code>run.results</code></td>
                 <td><span class="pill http">HTTP GET</span></td>
-                <td>Each call fetches current server session state (<code>GET .../sessions/{id}</code>) and verifies the manifest SHA-256. Call between trials, not inside a frame-rendering loop.</td>
+                <td>Each call fetches current server session state (<code>GET .../sessions/{id}</code>) and verifies the manifest SHA-256. Call between trials, not inside a frame-rendering loop. Reads are <strong>not retried</strong>: a dropped connection raises <code>ApiError</code>, and leaving <code>with session:</code> on that exception finishes the session as <code>"failed"</code>.</td>
               </tr>
               <tr>
                 <td><code>session.start()</code>, <code>session.finish()</code>, <code>run.record(...)</code>, <code>session.record(...)</code></td>
