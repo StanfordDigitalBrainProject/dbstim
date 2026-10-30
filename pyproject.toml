@@ -14,7 +14,7 @@ dependencies = []
 jupyter = ["jupyterlab>=4,<5"]
 
 [project.urls]
-Repository = "https://github.com/lobennett/dbstim"
+Repository = "https://github.com/StanfordDigitalBrainProject/dbstim"
 
 [tool.setuptools.packages.find]
 where = ["src"]
