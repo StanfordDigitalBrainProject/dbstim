@@ -7,16 +7,16 @@ videos, and report presentation progress from your own task program.
 
 Requires Python 3.11+. No other dependencies.
 
-    pip install "git+https://github.com/lobennett/dbstim.git@v0.5.0"
+    pip install "git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"
 
 or with uv:
 
-    uv add "dbstim @ git+https://github.com/lobennett/dbstim.git@v0.5.0"
+    uv add "dbstim @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"
 
 Pin a tag or commit for reproducible analyses.
 For the example notebook, add the Jupyter extra:
 
-    pip install "dbstim[jupyter] @ git+https://github.com/lobennett/dbstim.git@v0.5.0"
+    pip install "dbstim[jupyter] @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"
 
 Sign in with your dbstimuli.com account; no Google Cloud or API key is needed.
 dbstim replaces the legacy `dbp_api` package (revision `d11933f`).
@@ -102,4 +102,4 @@ The step-by-step notebook is `notebooks/api.ipynb`
 uv run python -m unittest discover -s tests -v
 ```
 
-[Guide](https://lobennett.github.io/dbstim/) · [API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)
+[Guide](https://stanforddigitalbrainproject.github.io/dbstim/) · [API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)
