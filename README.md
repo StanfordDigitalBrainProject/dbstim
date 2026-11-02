@@ -102,4 +102,4 @@ The step-by-step notebook is `notebooks/api.ipynb`
 uv run python -m unittest discover -s tests -v
 ```
 
-[Guide](https://lobennett.github.io/dbstim/) · [API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)
+[Guide](https://stanforddigitalbrainproject.github.io/dbstim/) · [API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)
