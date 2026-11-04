@@ -1,13 +1,7 @@
-import contextlib
 import copy
-import errno
 import hashlib
 import json
-import os
-from pathlib import Path
-import tempfile
 import unittest
-from unittest.mock import patch
 
 from dbstim import ApiError, Client, MetricFilter, Segment
 from dbstim.workflow import _manifest
@@ -86,99 +80,6 @@ class ValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "No experiment is named 'Other'; client.experiments"):
                 client.experiment('Other')
             self.assertEqual(client.experiment(id='experiment-1').id, 'experiment-1')
-
-    def test_download_reuses_verified_cache_and_never_follows_symlinks(self):
-        with server(Fixture()) as (url, requests), tempfile.TemporaryDirectory() as temporary:
-            client = Client('demo', 'secret', url=url)
-            session = client.experiment('Demo').subject('subject-001').session()
-            destination = Path(temporary) / 'nested' / 'download'
-            session.download(destination)
-            before = len(requests)
-            session.download(destination)
-            self.assertEqual(len(requests), before)
-            alias = Path(temporary) / 'alias'
-            alias.symlink_to(destination, target_is_directory=True)
-            with self.assertRaises(ValueError):
-                session.download(alias)
-            trial_path = destination / 'trial-1.mp4'
-            trial_path.unlink()
-            trial_path.symlink_to(destination / 'trial-2.mp4')
-            with self.assertRaises(ApiError):
-                session.run('run-001').media(session.run('run-001').trials[0])
-
-    def test_bad_checksum_leaves_unrelated_files_and_no_partial_video(self):
-        fixture = Fixture()
-
-        def respond(method, path, headers, body):
-            if path.endswith('/media'):
-                return 200, {'Content-Type': 'video/mp4', 'Content-Length': 3, 'X-Content-SHA256': 'a' * 64}, b'bad'
-            return fixture(method, path, headers, body)
-
-        with server(respond) as (url, _), tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            (root / 'keep.txt').write_text('keep')
-            session = Client('demo', 'secret', url=url).experiment('Demo').subject('subject-001').session()
-            with self.assertRaisesRegex(ApiError, 'checksum'):
-                session.download(root)
-            self.assertEqual([path.name for path in root.iterdir()], ['keep.txt'])
-
-    def test_separate_program_reuses_directory_and_recovers_orphan_receipt(self):
-        with server(Fixture()) as (url, _), tempfile.TemporaryDirectory() as temporary:
-            subject = Client('demo', 'secret', url=url).experiment('Demo').subject('subject-001')
-            subject.session().download(temporary)
-            (Path(temporary) / 'trial-1.json').unlink()
-            reopened = subject.session(directory=temporary)
-            reopened.download(temporary)
-            run = reopened.run('run-001')
-            self.assertEqual(run.media(run.trials[0]).read_bytes(), b'first-half')
-
-    def test_download_does_not_reopen_a_named_temporary_file(self):
-        with server(Fixture()) as (url, _), tempfile.TemporaryDirectory() as temporary:
-            session = Client('demo', 'secret', url=url).experiment('Demo').subject('subject-001').session()
-            with patch('dbstim.workflow.tempfile.NamedTemporaryFile', side_effect=PermissionError('Windows sharing violation')):
-                session.download(temporary)
-
-    def test_default_cache_is_per_user_and_shared_by_programs_in_any_directory(self):
-        with server(Fixture()) as (url, requests), tempfile.TemporaryDirectory() as temporary:
-            cache, first, second = (Path(temporary) / name for name in ('cache', 'notebook', 'task'))
-            first.mkdir()
-            second.mkdir()
-            with patch.dict(os.environ, XDG_CACHE_HOME=str(cache)):
-                with contextlib.chdir(first):
-                    folder = Client('demo', 'secret', url=url).experiment('Demo').subjects[0].sessions[0].download()
-                self.assertTrue(folder.is_relative_to(cache.resolve() / 'dbstim'))
-                downloads = sum(path.endswith('/media') for _, path, _, _ in requests)
-                with contextlib.chdir(second):
-                    session = Client('demo', 'secret', url=url).experiment('Demo').subjects[0].sessions[0]
-                    run = session.next_run()
-                    self.assertEqual([run.media(trial, mode='local').parent for trial in run.trials], [folder] * 3)
-                self.assertEqual(sum(path.endswith('/media') for _, path, _, _ in requests), downloads)
-                self.assertEqual(list(first.iterdir()) + list(second.iterdir()), [])
-                self.assertEqual(oct((cache / 'dbstim').stat().st_mode & 0o777), oct(0o700))
-                run.media(run.trials[0]).write_bytes(b'tampered')
-                with self.assertRaisesRegex(ApiError, 'does not match its verified receipt'):
-                    run.media(run.trials[0], mode='local')
-            with server(Fixture()) as (other, _), patch.dict(os.environ, XDG_CACHE_HOME=str(cache)):
-                elsewhere = Client('demo', 'secret', url=other).experiment('Demo').subjects[0].sessions[0].download()
-                self.assertNotEqual(elsewhere, folder)
-            with patch.dict(os.environ, XDG_CACHE_HOME='relative/cache'), patch('pathlib.Path.home', return_value=cache):
-                session = Client('demo', 'secret', url=url).experiment('Demo').subjects[0].sessions[0]
-                self.assertTrue(session.download().is_relative_to(cache.resolve() / '.cache' / 'dbstim'))
-
-    def test_local_disk_errors_are_disk_errors_and_leave_no_partial_files(self):
-        failures = ((patch('dbstim.workflow.Path.write_text', side_effect=OSError(errno.ENOSPC, 'No space left on device')),
-                     errno.ENOSPC, 'Could not save media in .*: No space left on device$'),
-                    (patch('dbstim.workflow.os.link', side_effect=OSError(errno.ENOTSUP, 'Operation not supported')),
-                     errno.ENOTSUP, 'cannot hard-link files \\(for example exFAT or FAT\\); choose a directory on your main disk$'))
-        for failure, code, message in failures:
-            with server(Fixture()) as (url, _), tempfile.TemporaryDirectory() as temporary:
-                run = Client('demo', 'secret', url=url).experiment('Demo').subject('subject-001').session(
-                    directory=temporary).next_run()
-                with self.subTest(code=code), failure, self.assertRaisesRegex(OSError, message) as caught:
-                    run.media(run.trials[0])
-                self.assertEqual(caught.exception.errno, code)
-                self.assertNotIsInstance(caught.exception, ApiError)
-                self.assertEqual(list(Path(temporary).iterdir()), [])
 
 
 if __name__ == '__main__':

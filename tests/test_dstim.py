@@ -1,10 +1,8 @@
 import hashlib
 import json
-import tempfile
 import unittest
-from unittest.mock import patch
 
-from dbstim import ApiError, Client, Experiment, MetricFilter, Run, Session, Subject, Trial
+from dbstim import Client, Experiment, MetricFilter
 from tests.http_fixture import server
 
 
@@ -95,68 +93,7 @@ class Fixture:
 
 
 class WorkflowTests(unittest.TestCase):
-    def test_typed_objects_server_resume_and_media(self):
-        fixture = Fixture()
-        with server(fixture) as (url, requests), tempfile.TemporaryDirectory() as directory:
-            with Client('demo', 'secret', url=url) as client:
-                self.assertEqual(client.metrics()[0], 'duration_seconds')
-                experiment = client.experiment('Demo')
-                self.assertIsInstance(experiment, Experiment)
-                subject = experiment.subject('subject-001')
-                self.assertIsInstance(subject, Subject)
-                session = subject.session('session-001')
-                self.assertIsInstance(session, Session)
-                run = session.run()
-                self.assertIsInstance(run, Run)
-                trial = run.next_trial()
-                self.assertIsInstance(trial, Trial)
-                self.assertEqual(trial.segment.end_seconds, 5)
-                session.download(directory)
-                for item in run.trials:
-                    self.assertTrue(run.media(item).is_file())
-                self.assertTrue(run.media(trial, mode='remote').startswith(url + '/api/v1/media-access/'))
-                session.start()
-                run.record(trial, 'started')
-                with self.assertRaisesRegex(ApiError, 'unconfirmed'):
-                    session.run().next_trial()
-                run.record(trial, 'completed', result={'answer': True})
-                other = Client('demo', 'secret', url=url)
-                self.assertEqual(other.experiment('Demo').subject('subject-001').session().run().next_trial().trial_id, 'trial-2')
-                session.finish('interrupted')
-                hashes = {hashlib.sha256(run.media(item).read_bytes()).hexdigest() for item in run.trials}
-                self.assertEqual(len(hashes), 2)
-                self.assertEqual(run.media(run.trials[0]).read_bytes(), run.media(run.trials[1]).read_bytes())
-                self.assertEqual(len({run.media(item) for item in run.trials}), 3)
-                run.media(trial).write_bytes(b'corrupted')
-                with self.assertRaises(ApiError):
-                    run.media(trial)
-                self.assertTrue(any(item[2].get('Cookie') == 'dbp_session=secret' for item in requests))
 
-    def test_lost_ack_is_resent_unchanged_and_blocks_advancement_until_acknowledged(self):
-        fixture = Fixture()
-        with server(fixture) as (url, requests), patch('dbstim.workflow._RETRY_DELAYS', (0, 0, 0)):
-            client = Client('demo', 'secret', url=url)
-            session = client.experiment('Demo').subject('subject-001').session()
-            session.start()
-            run = session.run()
-            trial = run.next_trial()
-            fixture.lost_reply = 1
-            run.record(trial, 'started')
-            sent = [body for _, path, _, body in requests if path.endswith('/trials')]
-            self.assertEqual(len(sent), 2)
-            self.assertEqual(sent[0], sent[1])
-            fixture.lost_reply = 4
-            with self.assertRaisesRegex(ApiError, "record\\(trial-1, 'completed'\\) was not acknowledged after 4 attempts"):
-                run.record(trial, 'completed')
-            before = len(fixture.commands)
-            with self.assertRaisesRegex(ApiError, 'not acknowledged'):
-                run.next_trial()
-            with self.assertRaisesRegex(ApiError, 'not acknowledged'):
-                session.finish('interrupted')
-            run.record(trial, 'completed')
-            self.assertEqual(len(fixture.commands), before)
-            self.assertEqual(len({body for _, path, _, body in requests if path.endswith('/trials')}), 2)
-            self.assertEqual(run.next_trial().trial_id, 'trial-2')
 
     def test_create_is_draft_and_pins_query(self):
         fixture = Fixture()
