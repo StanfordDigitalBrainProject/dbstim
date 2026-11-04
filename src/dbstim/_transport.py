@@ -1,4 +1,8 @@
-"""In-memory cookie sessions and bounded, non-redirecting stdlib HTTP."""
+"""In-memory cookie sessions and bounded stdlib HTTP.
+
+Redirects are never followed automatically. The one exception is a checked 307 from an
+experiment media URL to signed Google Cloud Storage, fetched without account cookies.
+"""
 
 from collections.abc import Iterator
 from contextlib import contextmanager

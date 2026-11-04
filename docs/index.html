@@ -583,7 +583,8 @@ with Client(
         <p style="margin-bottom: 0;">
           Session cookies and the CSRF token stay in memory and are cleared by <code>client.close()</code>, leaving
           <code>with client:</code>, or an HTTP <code>401</code>. Remote URLs must use <code>https://</code> without
-          embedded credentials, paths, or query strings, and the client never follows redirects.
+          embedded credentials, paths, or query strings. The client follows no redirects, except that an experiment
+          download may hand a video off to a signed Google Cloud Storage URL, fetched without your account cookies.
         </p>
       </section>
 
