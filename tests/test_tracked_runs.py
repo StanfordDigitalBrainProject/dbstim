@@ -1,5 +1,6 @@
 """Offline records and the S3 run-sync wire contract."""
 import csv
+from fractions import Fraction
 import json
 import os
 from pathlib import Path
@@ -8,8 +9,10 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import uuid
 
 import dbstim
+from dbstim._session import _computer_id
 
 
 class LocalRuns(unittest.TestCase):
@@ -47,11 +50,73 @@ class LocalRuns(unittest.TestCase):
         rows = self.rows()
         self.assertEqual(list(rows[0])[:2], ['onset', 'duration'])
         self.assertEqual([r['outcome'] for r in rows], ['completed', 'abandoned', 'abandoned'])
+        self.assertEqual([r['part'] for r in rows], ['1', '2', '2'])
         self.assertEqual(rows[0]['planned_duration'], '4.5')
         self.assertEqual(rows[0]['stim_file'], 'v1.mp4')
         self.assertEqual(json.loads(rows[0]['result']), {'response': 'a\tb\nc'})
         sidecar = json.loads(next(self.root.glob('sub-*/ses-*/beh/*events.json')).read_text())
         self.assertEqual(set(sidecar['outcome']['Levels']), {'completed', 'abandoned'})
+        self.assertIn('part', sidecar)
+
+    def test_resumed_part_restarting_time_zero_keeps_trial_order(self):
+        code = '''import os, sys, dbstim
+with dbstim.session(sys.argv[1]).run(1) as run:
+    first, second, _ = run
+    run.started(first, onset=2)
+    run.completed(first, duration=4.5)
+    run.started(second, onset=7)
+    os._exit(0)
+'''
+        subprocess.run([sys.executable, '-c', code, str(self.root)], check=True)
+        with dbstim.session(self.root).run(1) as run:
+            trial, = run
+            run.started(trial, onset=0.5)
+            run.completed(trial, duration=4.5)
+        rows = self.rows()
+        self.assertEqual([r['stim_file'] for r in rows], ['v1.mp4', 'v2.mp4', 'v3.mp4'])
+        self.assertEqual([float(r['onset']) for r in rows], [2, 7, 0.5])
+        self.assertEqual([r['outcome'] for r in rows], ['completed', 'abandoned', 'completed'])
+        self.assertEqual([r['part'] for r in rows], ['1', '1', '2'])
+
+    def test_numeric_timing_types_from_presentation_code(self):
+        class Float64(float):
+            """Stands in for numpy.float64, which subclasses float."""
+        with self.session.run(1) as run:
+            trials = list(run)
+            with self.assertRaises(ValueError):
+                run.started(trials[0], onset=True)
+            run.started(trials[0], onset=Float64(0.25))
+            run.completed(trials[0], duration=Fraction(9, 2))
+            try:
+                import numpy
+            except ImportError:
+                numpy = None
+            if numpy is not None:
+                presented = numpy.arange(135) / 30 + 10
+                summary = dbstim.frame_summary(presented, numpy.arange(135) / 30, numpy.float64(4.5))
+                run.started(trials[1], onset=numpy.int64(5))
+                run.completed(trials[1], duration=numpy.float32(0.5), result=summary)
+        rows = self.rows()
+        self.assertEqual((float(rows[0]['onset']), float(rows[0]['duration'])), (0.25, 4.5))
+        if numpy is not None:
+            self.assertEqual((float(rows[1]['onset']), float(rows[1]['duration'])), (5, 0.5))
+            self.assertIs(json.loads(rows[1]['result'])['reached_end'], True)
+
+    def test_sync_waits_for_unclosed_runs_and_reports_busy_session(self):
+        self.assertEqual(self.session.sync(), {1: 'waiting'})
+        code = '''import os, sys, dbstim
+with dbstim.session(sys.argv[1]).run(1) as run:
+    for trial in run:
+        run.started(trial, onset=trial.number)
+        run.completed(trial, duration=4.5)
+    os._exit(0)
+'''
+        subprocess.run([sys.executable, '-c', code, str(self.root)], check=True)
+        self.assertEqual(dbstim.session(self.root).sync(), {1: 'waiting'})
+        with self.session.run(1) as run:
+            self.assertEqual(list(run), [])
+            with self.assertRaisesRegex(RuntimeError, 'already open'):
+                dbstim.session(self.root).sync()
 
     def test_crash_torn_tail_and_recovery(self):
         code = '''import os, sys, dbstim
@@ -123,7 +188,10 @@ with dbstim.session(sys.argv[1]).run(1) as run:
 class FrameSummary(unittest.TestCase):
     def test_representative_pgl_arrays(self):
         self.assertEqual(dbstim.frame_summary([10, 10.1, 0, 10.3], [0, .1, .2, .3], .4),
-                         dict(frames_shown=3, frames_dropped=1, seconds_shown=.3, reached_end=True))
+                         dict(frames_shown=3, frames_dropped=1, seconds_shown=.4, reached_end=True))
+        full = dbstim.frame_summary([10 + i / 30 for i in range(135)], [i / 30 for i in range(135)], 4.5)
+        self.assertAlmostEqual(full['seconds_shown'], 4.5)
+        self.assertTrue(full['reached_end'])
         result = dbstim.frame_summary([10, 10.1, 0, 0], [0, .1, .2, .3], .4)
         self.assertEqual(result['frames_dropped'], 2)
         self.assertFalse(result['reached_end'])
@@ -134,6 +202,29 @@ class FrameSummary(unittest.TestCase):
         self.assertFalse(evidence['reached_end'])
         with self.assertRaises(ValueError):
             dbstim.frame_summary([1], [], 4)
+
+@unittest.skipIf(os.name == 'nt', 'Linux machine identity files')
+class LinuxComputerIdentity(unittest.TestCase):
+    def setUp(self):
+        _computer_id.cache_clear()
+        self.addCleanup(_computer_id.cache_clear)
+
+    def identity(self, files):
+        def read_text(path, *args, **kwargs):
+            if str(path) in files:
+                return files[str(path)]
+            raise FileNotFoundError(path)
+        with patch('dbstim._session.platform.system', return_value='Linux'), \
+                patch.object(Path, 'read_text', read_text):
+            return _computer_id()
+
+    def test_falls_back_to_dbus_machine_id_then_explains(self):
+        self.assertEqual(self.identity({'/var/lib/dbus/machine-id': 'abc\n'}),
+                         uuid.uuid5(uuid.NAMESPACE_OID, 'abc').hex)
+        _computer_id.cache_clear()
+        with self.assertRaisesRegex(RuntimeError, 'stable machine identity'):
+            self.identity({'/etc/machine-id': '\n'})
+
 
 from tests.real_server import ACCOUNTS, CHECKOUT, FaultProxy, count, real_server
 
@@ -166,7 +257,6 @@ class TrackedServer(unittest.TestCase):
         self.assertEqual((checked.subject, checked.session, checked.runs), (1, 1, (1, 2)))
         status = self.client._http._json('GET', checked._path)
         self.assertTrue(status['holder']['writer_id'])
-        from dbstim._session import _computer_id
         self.assertEqual(status['holder']['writer_id'], _computer_id())
         self.assertEqual(status['progress'], {})
         assigned = {row['media_id'] for block in checked._metadata['blocks'] for row in block['trials']}
@@ -184,10 +274,12 @@ class TrackedServer(unittest.TestCase):
             trial = next(iter(run))
             run.started(trial, onset=0)
             run.completed(trial, duration=.5)
-        self.assertEqual(checked.sync(), [])
+        self.assertEqual(checked.sync(), {1: 'waiting', 2: 'waiting'})
         self.finish(checked)
-        self.assertEqual(checked.sync(), ['accepted'])
-        self.assertEqual(checked.sync(), ['already synced'])
+        self.assertEqual(checked.sync(), {1: 'accepted', 2: 'waiting'})
+        self.proxy.seen.clear()
+        self.assertEqual(checked.sync(), {1: 'already synced', 2: 'waiting'})
+        self.assertEqual(self.proxy.seen, [])
         self.assertEqual(count(self.database, 'experiment_run_records'), before + 1)
         run = checked.run(1)
         run._read()
@@ -207,7 +299,7 @@ class TrackedServer(unittest.TestCase):
         with self.assertRaises(dbstim.ApiError):
             checked.sync()
         # A newly opened Session can send the exact same request after a process crash.
-        self.assertEqual(dbstim.session(checked.folder).sync(client=self.client), ['already synced'])
+        self.assertEqual(dbstim.session(checked.folder).sync(client=self.client), {1: 'already synced', 2: 'waiting'})
         requests = [json.loads(body) for method, path, _, body in self.proxy.seen if path.endswith('/runs/run-001/sync')]
         self.assertEqual(requests[0], requests[1])
         self.assertEqual(count(self.database, 'experiment_run_records'), before + 1)
@@ -221,10 +313,10 @@ class TrackedServer(unittest.TestCase):
             self.assertEqual(caught.exception.status, 409)
             second = self.checkout('second', takeover=True)
             self.finish(second)
-            self.assertEqual(second.sync(), ['accepted'])
+            self.assertEqual(second.sync(), {1: 'accepted', 2: 'waiting'})
         before = count(self.database, 'experiment_session_attempts')
-        self.assertEqual(first.sync(), ['kept as flagged attempt'])
-        self.assertEqual(first.sync(), ['kept as flagged attempt'])
+        self.assertEqual(first.sync(), {1: 'kept as flagged attempt', 2: 'waiting'})
+        self.assertEqual(first.sync(), {1: 'kept as flagged attempt', 2: 'waiting'})
         self.assertEqual(count(self.database, 'experiment_session_attempts'), before + 1)
         self.assertFalse(list(first.folder.glob('sub-*/ses-*/beh/*events.*')))
         flagged = list(first.folder.glob('sourcedata/attempt-*/sub-*/ses-*/beh/*events.tsv'))
@@ -244,15 +336,38 @@ class TrackedServer(unittest.TestCase):
             self.client._http._json('POST', first._path + '/runs/run-001/sync', changed)
         self.assertEqual(caught.exception.status, 409)
 
+    def test_takeover_refused_run_does_not_block_later_runs(self):
+        first = self.checkout()
+        self.finish(first)
+        self.assertEqual(first.sync(), {1: 'accepted', 2: 'waiting'})
+        with patch('dbstim._session._computer_id', return_value='c'*32):
+            second = self.checkout('second', takeover=True)
+            self.finish(second, 1)
+            self.finish(second, 2)
+        with self.assertRaises(dbstim.SyncError) as caught:
+            second.sync()
+        self.assertEqual(caught.exception.outcomes, {2: 'accepted'})
+        self.assertEqual(list(caught.exception.refused), [1])
+        self.assertEqual(caught.exception.refused[1].status, 409)
+        self.assertIn('run 1', str(caught.exception))
+        self.assertIn('already synced', str(caught.exception))
+        status = self.client._http._json('GET', second._path)
+        self.assertEqual({row['run_id']: row['writer_id'] for row in status['synced_runs']},
+                         {'run-001': _computer_id(), 'run-002': 'c'*32})
+        with self.assertRaises(dbstim.SyncError) as again:
+            second.sync()
+        self.assertEqual(again.exception.outcomes, {2: 'already synced'})
+
     def test_sync_during_open_run_waits(self):
         checked = self.checkout()
         self.finish(checked)
         with checked.run(2) as run:
             trial = next(iter(run))
             run.started(trial, onset=0)
-            self.assertEqual(checked.sync(), [])
+            with self.assertRaisesRegex(RuntimeError, 'already open'):
+                checked.sync()
             run.abandoned(trial)
-        self.assertEqual(checked.sync(), ['accepted'])
+        self.assertEqual(checked.sync(), {1: 'accepted', 2: 'waiting'})
 
     def test_session_two_downloads_only_its_assignments(self):
         self.exp = self.client.create(self.id() + '-two', count=4).schedule(
@@ -263,7 +378,7 @@ class TrackedServer(unittest.TestCase):
         self.assertEqual(len(checked._media), 2)
         self.assertEqual(len(list((checked.folder / 'stimuli').glob('*.mp4'))), 2)
         self.finish(checked)
-        self.assertEqual(checked.sync(), ['accepted'])
+        self.assertEqual(checked.sync(), {1: 'accepted'})
 
     def test_crashed_run_recovers_and_syncs_single_record(self):
         checked = self.checkout()
@@ -275,7 +390,7 @@ with dbstim.session(sys.argv[1]).run(1) as run:
         subprocess.run([sys.executable, '-c', code, str(checked.folder)], check=True)
         reopened = dbstim.session(checked.folder)
         self.finish(reopened)
-        self.assertEqual(reopened.sync(client=self.client), ['accepted'])
+        self.assertEqual(reopened.sync(client=self.client), {1: 'accepted', 2: 'waiting'})
         run = reopened.run(1)
         run._read()
         stored = self.client._http._json('GET', reopened._path + '/run-records/' + run._payload()['request_id'])

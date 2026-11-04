@@ -3,9 +3,8 @@ from contextlib import contextmanager
 import csv
 from dataclasses import dataclass
 from functools import lru_cache
-import hashlib
 import json
-import math
+import numbers
 import os
 import platform
 import re
@@ -32,14 +31,24 @@ def _computer_id():
                             access=winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
             identity = winreg.QueryValueEx(key, 'MachineGuid')[0]
     else:
-        identity = Path('/etc/machine-id').read_text().strip()
+        identity = ''
+        for candidate in ('/etc/machine-id', '/var/lib/dbus/machine-id'):
+            try:
+                identity = Path(candidate).read_text().strip()
+            except OSError:
+                continue
+            if identity:
+                break
+        if not identity:
+            raise RuntimeError('Tracked runs need a stable machine identity in /etc/machine-id '
+                               'or /var/lib/dbus/machine-id')
     return uuid.uuid5(uuid.NAMESPACE_OID, identity).hex
 
 
 def _seconds(value):
-    if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1e12:
+    if not isinstance(value, numbers.Real) or isinstance(value, bool) or not 0 <= value <= 1e12:
         raise ValueError('Timing must be finite nonnegative seconds (at most 1e12)')
-    return value
+    return float(value)
 
 
 def _save(path, value):
@@ -102,7 +111,7 @@ def checkout(experiment, *, subject, session=1, folder, takeover=False):
     path = experiment._path + '/subjects/' + subject_id
     manifest = http._json('GET', path + '/manifest')
     blocks = _manifest(manifest, experiment.id, subject_id)
-    selected = [block for block in blocks if block.session_id == session_id]
+    selected = [(raw, block) for raw, block in zip(manifest['blocks'], blocks) if block.session_id == session_id]
     if not selected:
         raise ValueError('No such subject session in this experiment')
     root = Path(folder).expanduser().resolve()
@@ -110,11 +119,11 @@ def checkout(experiment, *, subject, session=1, folder, takeover=False):
     metadata = dict(schema_version=1, origin=http.origin, username=experiment._client.username,
                     experiment_id=experiment.id, subject=subject, session=session,
                     manifest_sha256=manifest['manifest_sha256'],
-                    blocks=[block for block in manifest['blocks'] if block.get('session_id', 'session-001') == session_id])
+                    blocks=[dict(raw, run_id=block.run_id) for raw, block in selected])
     if (state / 'session.json').exists() and json.loads((state / 'session.json').read_text(encoding='utf-8')) != metadata:
         raise ValueError('Folder belongs to another subject session or revision')
     media = json.loads(json.dumps(experiment._media_manifest))
-    wanted = {trial.stimulus_id for block in selected for trial in block.trials}
+    wanted = {trial.stimulus_id for _, block in selected for trial in block.trials}
     media['media'] = [row for row in media['media'] if row['media_id'] in wanted]
     claim = dict(request_id=uuid.uuid4().hex, writer_id=_computer_id(), takeover=takeover)
     response = http._json('POST', path + '/sessions/' + session_id + '/start', claim)
@@ -134,6 +143,18 @@ class Trial:
     file: Path
     video_id: str
     role: Literal['video', 'repeat', 'foil']
+
+
+class SyncError(ApiError):
+    """The server refused some closed runs; the other runs still synced.
+
+    refused maps each refused run number to the server's error. outcomes maps every
+    other run number to its sync outcome.
+    """
+    def __init__(self, refused, outcomes):
+        super().__init__('Sync refused ' + '; '.join(f'run {number}: {error}' for number, error in refused.items()))
+        self.refused = refused
+        self.outcomes = outcomes
 
 
 class Session:
@@ -157,13 +178,17 @@ class Session:
         return Run(self, number)
 
     def sync(self, *, client=None):
-        """Upload each closed run atomically. client= reuses an authenticated connection.
+        """Upload each closed run once and return {run number: outcome} for every run.
 
-        Reopened sessions otherwise prompt through connect(). Open and unfinished runs wait.
-        Each returned outcome corresponds to a closed run, in planned order.
+        Outcomes are 'accepted', 'already synced', 'kept as flagged attempt', or 'waiting'
+        for a run that is not closed yet. client= reuses an authenticated connection;
+        otherwise a reopened session prompts through connect() when a run needs uploading.
+        When the server refuses runs, the remaining runs still sync and SyncError then
+        names each refused run. RuntimeError means another recorder or sync has the
+        session open.
         """
         from .client import connect
-        outcomes = []
+        outcomes, refused = {}, {}
         owned_client = None
         try:
             with _lock(self._state / 'session.lock'):
@@ -171,43 +196,36 @@ class Session:
                     run = self.run(number)
                     run._read()
                     if not run._closed:
+                        outcomes[number] = 'waiting'
                         continue
-                    connection = client or self._client
-                    if connection is None:
-                        if owned_client is None:
-                            owned_client = connect(self._metadata['username'], url=self._metadata['origin'])
-                        connection = owned_client
-                    if connection._http.origin != self._metadata['origin']:
-                        raise ValueError('Sync client belongs to another server')
-                    payload = run._payload()
-                    digest = hashlib.sha256(_json(payload)).hexdigest()
                     receipt_path = self._state / f'run-{number:03d}-receipt.json'
-                    receipt = json.loads(receipt_path.read_text(encoding='utf-8')) if receipt_path.exists() else None
-                    if receipt and receipt['digest'] != digest:
-                        raise ApiError('Synced run has changed; its record cannot be replaced', status=409)
-                    previous = receipt is not None
-                    if not previous:
+                    previous = receipt_path.exists()
+                    if previous:
+                        response = json.loads(receipt_path.read_text(encoding='utf-8'))['response']
+                    else:
+                        connection = client or self._client
+                        if connection is None:
+                            if owned_client is None:
+                                owned_client = connect(self._metadata['username'], url=self._metadata['origin'])
+                            connection = owned_client
+                        if connection._http.origin != self._metadata['origin']:
+                            raise ValueError('Sync client belongs to another server')
                         try:
-                            stored = connection._http._json('GET', self._path + '/run-records/' + payload['request_id'])
+                            response, previous = run._upload(connection._http)
                         except ApiError as error:
-                            if error.status != 404:
+                            if error.status is None:
                                 raise
-                        else:
-                            previous = True
-                            if stored.get('record') != payload:
-                                raise ApiError('Synced run has changed; its record cannot be replaced', status=409)
-                    response = connection._http._json('POST', self._path + '/runs/' + run._block['run_id'] + '/sync', payload)
-                    if (response.get('accepted') != payload['request_id'] or type(response.get('flagged')) is not bool):
-                        raise ApiError('Server did not acknowledge this run')
-                    _save(receipt_path, dict(digest=digest, response=response))
+                            refused[number] = error
+                            continue
+                        _save(receipt_path, dict(response=response))
                     run._write_events(flagged=response['flagged'])
-                    outcomes.append('kept as flagged attempt' if response['flagged'] else
-                                    'already synced' if previous else 'accepted')
-        except _Busy:
-            return []
+                    outcomes[number] = ('kept as flagged attempt' if response['flagged'] else
+                                        'already synced' if previous else 'accepted')
         finally:
             if owned_client is not None:
                 owned_client.close()
+        if refused:
+            raise SyncError(refused, outcomes)
         return outcomes
 
 
@@ -266,11 +284,13 @@ class Run:
     def _append(self, record):
         encoded = _json(record) + b'\n'
         try:
+            created = not self._journal.exists()
             with self._journal.open('ab') as stream:
                 stream.write(encoded)
                 stream.flush()
                 os.fsync(stream.fileno())
-            _sync_directory(self._journal.parent)
+            if created:
+                _sync_directory(self._journal.parent)
         except BaseException:
             self._write_failed = True
             raise
@@ -287,11 +307,15 @@ class Run:
         try:
             self._write_failed = False
             self._read()
-            if not self._records:
+            resumed = bool(self._records)
+            if not resumed:
                 self._append(dict(kind='opened', started_at=time.time(), request_id=uuid.uuid4().hex,
                                   writer_id=_computer_id()))
-            if not self._closed and self._records[0]['writer_id'] != _computer_id():
-                raise RuntimeError('An unfinished run belongs to another computer')
+            if not self._closed:
+                if self._records[0]['writer_id'] != _computer_id():
+                    raise RuntimeError('An unfinished run belongs to another computer')
+                if resumed:
+                    self._append(dict(kind='resumed', resumed_at=time.time()))
             self._active = True
             if self._events and self._events[-1]['status'] == 'started':
                 trial = self._trials[len(self._events) // 2]
@@ -371,6 +395,21 @@ class Run:
                     manifest_sha256=self.session._metadata['manifest_sha256'],
                     started_at=header['started_at'], ended_at=close['ended_at'], status=close['status'], events=self._events)
 
+    def _upload(self, http):
+        """POST this closed run; previous tells a record stored before a lost reply from a new one."""
+        path, payload = self.session._path, self._payload()
+        try:
+            http._json('GET', path + '/run-records/' + payload['request_id'])
+            previous = True
+        except ApiError as error:
+            if error.status != 404:
+                raise
+            previous = False
+        response = http._json('POST', path + '/runs/' + self._block['run_id'] + '/sync', payload)
+        if response.get('accepted') != payload['request_id'] or type(response.get('flagged')) is not bool:
+            raise ApiError('Server did not acknowledge this run')
+        return response, previous
+
     def _events_path(self, flagged):
         root = self.session.folder
         if flagged:
@@ -386,19 +425,27 @@ class Run:
             flagged = receipt.exists() and json.loads(receipt.read_text(encoding='utf-8'))['response']['flagged']
         target = self._events_path(flagged)
         target.parent.mkdir(parents=True, exist_ok=True)
+        parts, opening, started = {}, 0, []
+        for record in self._records:
+            if record.get('kind') in ('opened', 'resumed'):
+                opening += 1
+            elif record.get('status') == 'started':
+                started.append(parts.setdefault(opening, len(parts) + 1))
         rows = []
-        for trial, plan, start, end in zip(self._trials, self._block['trials'], self._events[::2], self._events[1::2]):
+        for trial, plan, start, end, part in zip(self._trials, self._block['trials'], self._events[::2],
+                                                 self._events[1::2], started):
             media = self.session._media[plan['media_id']]
             result = end.get('result')
             rows.append(dict(onset=start['onset'], duration=end.get('duration', 'n/a'), trial_type=trial.role,
                              stim_file=media['file_name'], video_id=trial.video_id,
-                             planned_duration=media['duration_seconds'], outcome=end['status'],
+                             planned_duration=media['duration_seconds'], outcome=end['status'], part=part,
                              result=_json(result).decode() if result is not None else 'n/a'))
         with _atomic(target) as stream:
-            writer = csv.DictWriter(stream, delimiter='\t', quotechar=None, quoting=csv.QUOTE_NONE, fieldnames=['onset', 'duration', 'trial_type', 'stim_file',
-                                                                       'video_id', 'planned_duration', 'outcome', 'result'])
+            writer = csv.DictWriter(stream, delimiter='\t', quotechar=None, quoting=csv.QUOTE_NONE, fieldnames=[
+                'onset', 'duration', 'trial_type', 'stim_file', 'video_id', 'planned_duration', 'outcome', 'part',
+                'result'])
             writer.writeheader()
-            writer.writerows(sorted(rows, key=lambda row: row['onset']))
+            writer.writerows(rows)
         _save(target.with_suffix('.json'), dict(
             trial_type=dict(Description='Assigned stimulus role.', Levels=dict(video='Original video', repeat='Repeated video', foil='Foil segment')),
             stim_file=dict(Description='Movie path relative to the dataset stimuli directory.'),
@@ -406,6 +453,8 @@ class Run:
             planned_duration=dict(Description='Manifest presentation length.', Units='s'),
             outcome=dict(Description='Outcome reported by presentation code; dbstim does not verify display.',
                          Levels=dict(completed='Reported shown to the end.', abandoned='Started but not completed.')),
+            part=dict(Description='Recording part of the run, numbered from 1. Resuming an interrupted run starts '
+                                  'a new part; onset counts from the time zero the presentation code used in that part.'),
             result=dict(Description='Opaque compact JSON object from presentation code, or n/a.')))
         if flagged:
             raw = self._events_path(False)
