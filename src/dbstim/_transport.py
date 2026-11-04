@@ -1,4 +1,8 @@
-"""In-memory cookie sessions and bounded, non-redirecting stdlib HTTP."""
+"""In-memory cookie sessions and bounded stdlib HTTP.
+
+Redirects are never followed automatically. The one exception is a checked 307 from an
+experiment media URL to signed Google Cloud Storage, fetched without account cookies.
+"""
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -15,11 +19,12 @@ from .models import JSONObject, JSONValue
 
 
 class ApiError(RuntimeError):
-    """Sanitized request failure; HTTP status is available without response text."""
+    """Sanitized request failure; HTTP status and Retry-After seconds are available without response text."""
 
-    def __init__(self, message: str, *, status: int | None = None) -> None:
+    def __init__(self, message: str, *, status: int | None = None, retry_after: int | None = None) -> None:
         super().__init__(message)
         self.status = status
+        self.retry_after = retry_after
 
 
 class _Unreachable(ApiError):
@@ -112,8 +117,17 @@ class Transport:
         try:
             response = self._opener.open(request, timeout=self.timeout)
         except HTTPError as error:
+            if (error.code == 307 and media and method == 'GET'
+                    and re.fullmatch(r'/api/v1/experiments/[A-Za-z0-9_-]+/media/[^/]+', path)):
+                location = error.headers.get('Location', '')
+                error.close()
+                with self._signed_media(location) as response:
+                    yield response
+                return
             status = error.code
             detail = None
+            retry_after = (error.headers.get('Retry-After') or '').strip() if status == 503 else ''
+            retry_after = int(retry_after) if re.fullmatch(r'[0-9]{1,6}', retry_after) else None
             try:
                 if status in (400, 404, 409, 503) and not path.startswith("/api/auth/"):
                     raw = error.read(4097)
@@ -133,7 +147,8 @@ class Transport:
                 self.close()
                 detail = "you are signed out; connect again"
             message = f"Server returned HTTP {status}"
-            raise ApiError(message + (f": {detail}" if detail else "; response body withheld"), status=status) from None
+            raise ApiError(message + (f": {detail}" if detail else "; response body withheld"), status=status,
+                           retry_after=retry_after) from None
         except (OSError, URLError, HTTPException):
             raise _Unreachable() from None
         # Errors raised by the caller's block, such as a full disk, are not connection failures.
@@ -142,6 +157,34 @@ class Transport:
                 raise ApiError("Unexpected HTTP response", status=response.status)
             if response.headers.get("Content-Encoding", "identity").lower() != "identity":
                 raise ApiError("Encoded responses are not supported")
+            yield response
+
+    @contextmanager
+    def _signed_media(self, location: str) -> Iterator[HTTPResponse]:
+        """The server's GCS handoff uses an anonymous request, without account cookies."""
+        try:
+            parsed = urlsplit(location)
+            valid = (parsed.scheme == 'https' and parsed.netloc == 'storage.googleapis.com'
+                     and not parsed.fragment and all(32 < ord(c) < 127 for c in location))
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ApiError('Invalid signed media redirect')
+        opener = build_opener(ProxyHandler({}), _NoRedirect())
+        request = Request(location, headers={'Accept': 'video/mp4', 'Accept-Encoding': 'identity'})
+        try:
+            response = opener.open(request, timeout=self.timeout)
+        except HTTPError as error:
+            status = error.code
+            error.close()
+            raise ApiError(f'Media server returned HTTP {status}', status=status) from None
+        except (OSError, URLError, HTTPException):
+            raise _Unreachable() from None
+        with response:
+            if response.status != 200:
+                raise ApiError('Unexpected media response', status=response.status)
+            if response.headers.get('Content-Encoding', 'identity').lower() != 'identity':
+                raise ApiError('Encoded responses are not supported')
             yield response
 
     @staticmethod

@@ -99,7 +99,7 @@ class WorkflowTests(unittest.TestCase):
         fixture = Fixture()
         with server(fixture) as (url, requests), tempfile.TemporaryDirectory() as directory:
             with Client('demo', 'secret', url=url) as client:
-                self.assertEqual(client.metrics()[0].id, 'duration_seconds')
+                self.assertEqual(client.metrics()[0], 'duration_seconds')
                 experiment = client.experiment('Demo')
                 self.assertIsInstance(experiment, Experiment)
                 subject = experiment.subject('subject-001')

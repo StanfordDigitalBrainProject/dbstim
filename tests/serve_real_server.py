@@ -7,10 +7,14 @@ outcomes did, like a database that no operator has upgraded yet.
 """
 
 from contextlib import closing
+import hashlib
 import json
+import os
+import shutil
 from pathlib import Path
 import socket
 import sqlite3
+import subprocess
 import sys
 import unittest
 
@@ -40,10 +44,18 @@ test_metric_routes.MetricRoutesTests.setUp(case)
 if '--legacy-events' in sys.argv[2:]:
     with closing(sqlite3.connect(case.root / 'accounts.sqlite3')) as database, database:
         database.execute(LEGACY_EVENTS)
+if '--real-media' in sys.argv[2:]:
+    os.environ['DBP_RUNNER_FFMPEG_PATH'] = shutil.which('ffmpeg') or ''
 media = case.root / 'media'
 media.mkdir()
 for index in range(4):
-    (media / f'source_part_{index:08d}.mp4').write_bytes(f'synthetic video {index}\n'.encode() * 512)
+    target = media / f'source_part_{index:08d}.mp4'
+    if '--real-media' in sys.argv[2:]:
+        subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i',
+                        f'color=c=blue:s=32x32:r=30:d={index + 1}', '-c:v', 'libx264',
+                        '-pix_fmt', 'yuv420p', str(target)], check=True)
+    else:
+        target.write_bytes(f'synthetic video {index}\n'.encode() * 512)
 
 
 def lookup(clip_ids):
@@ -56,8 +68,15 @@ def video_path(clip_id):
     return path if path.is_file() else None
 
 
+def source_pin(clip_id):
+    path = video_path(clip_id)
+    if path is not None:
+        content = path.read_bytes()
+        return hashlib.sha256(content).hexdigest(), len(content)
+
+
 install_metric_studies(case.app, case.service, case.store, lambda request: 'test', lookup,
-                       runner_video_path=video_path)
+                       runner_video_path=video_path, download_video_path=video_path, source_pin=source_pin)
 install_metric_collections(case.app, case.service, case.store, lookup, lambda request: 'test')
 listener = socket.socket()
 listener.bind(('127.0.0.1', 0))

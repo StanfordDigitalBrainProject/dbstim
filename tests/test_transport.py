@@ -123,3 +123,44 @@ class TransportTests(unittest.TestCase):
             with patch('http.client.HTTPResponse.read', side_effect=ConnectionResetError('secret')), \
                     self.assertRaisesRegex(ApiError, '^Request failed; connection details withheld$'):
                 client._json('GET', '/api/v1/metrics')
+
+    def test_experiment_media_follows_only_anonymous_signed_gcs_handoff(self):
+        import io
+        from email.message import Message
+        from unittest.mock import MagicMock
+
+        def respond(method, path, headers, body):
+            if path.endswith('/login'):
+                return response({'csrf_token': 'csrf'}, **{'Set-Cookie': 'session=private; Path=/'})
+            return 307, {'Location': 'https://storage.googleapis.com/pinned/video.mp4?signature=secret'}, b''
+
+        with server(respond) as (origin, _):
+            client = Transport(origin)
+            client.login('user', 'password')
+            destination = io.BytesIO(b'movie bytes')
+            destination.status = 200
+            destination.headers = Message()
+            destination.headers['Content-Type'] = 'video/mp4'
+            opener = MagicMock()
+            opener.open.return_value = destination
+            with patch('dbstim._transport.build_opener', return_value=opener) as built:
+                with client._request('GET', '/api/v1/experiments/exp/media/video', media=True) as stream:
+                    self.assertEqual(stream.read(), b'movie bytes')
+            from urllib.request import HTTPCookieProcessor
+            self.assertFalse(any(isinstance(handler, HTTPCookieProcessor) for handler in built.call_args.args))
+            request = opener.open.call_args.args[0]
+            self.assertIsNone(request.get_header('Cookie'))
+            self.assertIsNone(request.get_header('X-csrf-token'))
+            self.assertIsNone(request.data)
+            self.assertEqual(request.get_method(), 'GET')
+
+    def test_media_redirect_rejects_arbitrary_hosts_and_credentials(self):
+        for location in ('http://storage.googleapis.com/object', 'https://evil.test/object',
+                         'https://storage.googleapis.com.evil.test/object',
+                         'https://user:secret@storage.googleapis.com/object',
+                         'https://storage.googleapis.com:443/object'):
+            with self.subTest(location=location):
+                with server(lambda *args: (307, {'Location': location}, b'')) as (origin, _):
+                    with self.assertRaisesRegex(ApiError, 'Invalid signed media redirect'):
+                        with Transport(origin)._request('GET', '/api/v1/experiments/exp/media/video', media=True):
+                            self.fail('Invalid redirect accepted')

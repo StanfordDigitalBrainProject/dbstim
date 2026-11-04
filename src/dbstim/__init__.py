@@ -1,9 +1,9 @@
 """Create experiments, retrieve stimuli, and report task progress."""
 
 from .client import ApiError, Client, connect
-from .models import Metric, MetricFilter, Segment, Trial
+from .models import Filter, Metric, MetricFilter, Segment, Trial
 from .workflow import Experiment, Subject, Session, Run
 
 __version__ = '0.5.0'
 __all__ = ['ApiError', 'Client', 'connect', 'Experiment', 'Subject', 'Session', 'Run', 'Trial', 'Metric',
-           'MetricFilter', 'Segment']
+           'MetricFilter', 'Segment', 'Filter']
