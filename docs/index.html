@@ -666,7 +666,7 @@ newer = experiment.replace(["video-id-to-drop"], reason="blurry")  # new revisio
             </p>
         <div class="code-wrap">
           <pre><code class="language-python" data-snippet="journey-checkout">scheduled = client.open("Clips").schedule(
-    subjects=5, sessions=1, runs=2, trials_per_run=8,
+    subjects=5, sessions=1, runs=2, trials_per_run=4,
     foils_per_run=0, repeats_per_run=0, shared_fraction=0,
 )
 scheduled.checkout(subject=1, session=1, folder="sub01_ses01")</code></pre>
@@ -710,7 +710,7 @@ with session.run(1) as run:
           <strong>With PGL</strong>
           PGL owns the loop, so the calls go in your <code>pglTask</code> hooks around <code>e.run()</code>: start the trial
           when its movie segment starts, then record <code>completed</code> or <code>abandoned</code> after
-          <code>movie.play()</code> returns, and abandon an open trial when Escape ends the task. The documented example is
+          <code>movie.play()</code> returns, and leaving the <code>with session.run(n)</code> block abandons a trial that started without an ending. The documented example is
           <a href="https://github.com/StanfordDigitalBrainProject/dbstim/blob/main/examples/pgl_tracked_movie_task.py"><code>examples/pgl_tracked_movie_task.py</code></a>;
           it is user code, and dbstim does not import PGL.
         </div>

@@ -266,7 +266,7 @@ folder = experiment.download("clips_bids")
   <div class="split">
 <pre><code># online, before
 scheduled = client.open("Clips").schedule(
-    subjects=5, runs=2, trials_per_run=8)
+    subjects=5, runs=2, trials_per_run=4)
 scheduled.checkout(subject=1, session=1, folder="sub01_ses01")
 
 # offline, on the presentation computer

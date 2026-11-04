@@ -8,7 +8,7 @@ Three steps, each a command:
 
     # 1. Online, before the session: reserve subject 1, session 1 for this
     #    computer and download its videos and run plans.
-    python pgl_tracked_movie_task.py checkout "Memory demo" 1 1 sub01_ses01
+    python pgl_tracked_movie_task.py checkout "Clips" 1 1 sub01_ses01
 
     # 2. Offline, on the presentation Mac: run 1. No website traffic until it ends.
     python pgl_tracked_movie_task.py run sub01_ses01 1
@@ -17,12 +17,14 @@ Three steps, each a command:
     python pgl_tracked_movie_task.py sync sub01_ses01
 
 Step 1 assumes the experiment already has a schedule, for example from
-``client.open("Memory demo").schedule(subjects=5, runs=2, trials_per_run=24)``.
+``client.open("Clips").schedule(subjects=5, runs=2, trials_per_run=4)``, which
+assigns all 40 videos of the README's "Clips" selection.
 
 Running step 2 again after a crash or Escape continues with the trials that
-have no outcome yet. A trial that was playing when the program died is
-recorded abandoned when the run is reopened; it is not shown again. The run
-syncs once every trial has an outcome.
+have no outcome yet. A trial that started without an ending, because the
+program died or raised, for example on a movie that failed to load, is
+recorded abandoned when the run block exits or the run is reopened; it is not
+shown again. The run syncs once every trial has an outcome.
 
 The PGL calls follow justingardner/pgl at e830691 (``pglTask`` hooks,
 ``pgl.movie(...).play()`` and the movie's ``presentedTimes``, ``movieTimes`` and
@@ -51,8 +53,6 @@ class TrackedMovieTask(pglTask):
         self.settings.taskName = 'dbstim movies'
         self.settings.nTrials = len(self.trials)
         self.settings.seglen = [0.5, float('inf')]
-        self.current = None      # trial loaded in segment 0
-        self.playing = None      # trial recorded started and not yet ended
 
     def startTask(self, startTime):
         self.t0 = startTime  # this run's time zero: onsets are seconds after it
@@ -61,36 +61,18 @@ class TrackedMovieTask(pglTask):
     def startSegment(self, startTime):
         super().startSegment(startTime)
         if self.state.currentSegment == 0:
-            self.current = self.trials[self.state.currentTrial]
-            self.movie = self.pgl.movie(str(self.current.file), displayWidth=30)
-            if self.movie.movieNum is None:
-                # PGL only warns when a movie fails to load; record it so it is not lost.
-                self.run.started(self.current, onset=startTime - self.t0)
-                self.run.abandoned(self.current, duration=0.0)
-                self.current = None
+            self.trial = self.trials[self.state.currentTrial]
+            self.movie = self.pgl.movie(str(self.trial.file), displayWidth=30)
         elif self.state.currentSegment == 1:
-            trial, self.current = self.current, None
-            if trial is None:  # the movie failed to load and is already recorded
-                self.jumpSegment()
-                return
-            self.run.started(trial, onset=startTime - self.t0)
-            self.playing = trial
+            self.run.started(self.trial, onset=startTime - self.t0)
             self.movie.play()  # blocks until the movie ends or Escape
             summary = dbstim.frame_summary(self.movie.presentedTimes, self.movie.movieTimes,
                                            self.movie.duration)
             if summary['reached_end']:
-                self.run.completed(trial, duration=summary['seconds_shown'], result=summary)
+                self.run.completed(self.trial, duration=summary['seconds_shown'], result=summary)
             else:
-                self.run.abandoned(trial, duration=summary['seconds_shown'])
-            self.playing = None
+                self.run.abandoned(self.trial, duration=summary['seconds_shown'])
             self.jumpSegment()
-
-    def endTask(self):
-        # Escape ends PGL tasks normally. A trial that started without an ending is
-        # abandoned; trials never started stay open for the next run of this script.
-        if self.playing is not None:
-            self.run.abandoned(self.playing)
-            self.playing = None
 
 
 def checkout(name, subject, session, folder):
@@ -106,8 +88,11 @@ def run(folder, number):
     if PGL is None:
         raise SystemExit('This step needs PGL: https://github.com/justingardner/pgl')
     session = dbstim.session(folder)
-    pgl = PGL()
     with session.run(number) as tracked:
+        if not list(tracked):
+            print(f'Run {number} has no trials left to show.')
+            return
+        pgl = PGL()
         experiment = pglExperiment(pgl, subjectID=f'sub-{session.subject:02d}', experimentName='dbstim',
                                    sessionName=f'ses-{session.session:02d}', runName=f'run-{number:02d}')
         experiment.addTask(TrackedMovieTask(pgl, tracked))

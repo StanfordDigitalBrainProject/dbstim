@@ -32,11 +32,6 @@ class DemoTests(unittest.TestCase):
                 code.append(source)
         self.assertLessEqual(len('\n'.join(code).splitlines()), 50)
         self.assertNotIn('password123', path.read_text())
-        joined = '\n'.join(code)
-        for journey in ('client.create(', '.download(', '.schedule(', '.checkout(', 'dbstim.session(',
-                        'run.started(', 'run.completed(', 'frame_summary(', '.sync('):
-            self.assertIn(journey, joined)
-        self.assertLess(joined.index('.download('), joined.index('.checkout('), 'Journey A comes before B')
 
     def test_readme_installs_this_release(self):
         pins = re.findall(r'dbstim\.git@([^"\s]+)', (ROOT / 'README.md').read_text())

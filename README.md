@@ -49,7 +49,7 @@ No subjects, scheduling or tracking are needed.
 Online, before the session:
 
 ```python
-experiment = client.open("Clips").schedule(subjects=5, runs=2, trials_per_run=8)
+experiment = client.open("Clips").schedule(subjects=5, runs=2, trials_per_run=4)
 experiment.checkout(subject=1, session=1, folder="sub01_ses01")
 ```
 
