@@ -27,7 +27,8 @@ class LocalRuns(unittest.TestCase):
         (self.root / 'stimuli/manifest.json').write_text(json.dumps(dict(media=media)))
         metadata = dict(schema_version=1, origin='http://localhost:12345', username='admin',
                         experiment_id='a'*32, subject=1, session=1, manifest_sha256='b'*64,
-                        blocks=[dict(run_id='run-001', trials=[dict(trial_id=f't{i}', media_id=f'm{i}', role='parent')
+                        blocks=[dict(run_id='run-001', trials=[dict(trial_id=f't{i}', media_id=f'v{i}', segment=None,
+                                                                 manifest_media_id=f'm{i}', role='parent')
                                                             for i in range(1, 4)])])
         (state / 'session.json').write_text(json.dumps(metadata))
         self.session = dbstim.session(self.root)
@@ -259,7 +260,7 @@ class TrackedServer(unittest.TestCase):
         self.assertTrue(status['holder']['writer_id'])
         self.assertEqual(status['holder']['writer_id'], _computer_id())
         self.assertEqual(status['progress'], {})
-        assigned = {row['media_id'] for block in checked._metadata['blocks'] for row in block['trials']}
+        assigned = {row['manifest_media_id'] for block in checked._metadata['blocks'] for row in block['trials']}
         self.assertEqual(set(checked._media), assigned)
         self.assertFalse(any(path.endswith('/trials') for _, path, _, _ in self.proxy.seen))
         # Re-checkout by the same computer reuses verified media.
@@ -379,6 +380,27 @@ class TrackedServer(unittest.TestCase):
         self.assertEqual(len(list((checked.folder / 'stimuli').glob('*.mp4'))), 2)
         self.finish(checked)
         self.assertEqual(checked.sync(), {1: 'accepted'})
+
+    def test_foil_schedule_checks_out_segments_and_records(self):
+        self.exp = self.client.create(self.id() + '-foils', count=4).schedule(
+            subjects=2, sessions=1, runs=2, trials_per_run=3, foils_per_run=1, repeats_per_run=1)
+        checked = self.checkout()
+        plan = [row for block in checked._metadata['blocks'] for row in block['trials']]
+        self.assertTrue(all(row['segment'] is not None for row in plan if row['role'] == 'foil'))
+        files = sorted(path.name for path in (checked.folder / 'stimuli').glob('*.mp4'))
+        self.assertEqual(files, sorted({checked._media[row['manifest_media_id']]['file_name'] for row in plan}))
+        with checked.run(1) as run:
+            trials = list(run)
+            self.assertEqual({trial.role for trial in trials}, {'video', 'repeat', 'foil'})
+            self.assertEqual([trial.video_id for trial in trials],
+                             [row['media_id'] for row in checked._metadata['blocks'][0]['trials']])
+        self.finish(checked)
+        self.assertEqual(checked.sync(), {1: 'accepted', 2: 'waiting'})
+        with next(checked.folder.glob('sub-*/ses-*/beh/*run-01_events.tsv')).open() as stream:
+            rows = list(csv.DictReader(stream, delimiter='\t'))
+        media = [checked._media[row['manifest_media_id']] for row in checked._metadata['blocks'][0]['trials']]
+        self.assertEqual([row['stim_file'] for row in rows], [item['file_name'] for item in media])
+        self.assertEqual([float(row['planned_duration']) for row in rows], [item['duration_seconds'] for item in media])
 
     def test_crashed_run_recovers_and_syncs_single_record(self):
         checked = self.checkout()

@@ -116,14 +116,24 @@ def checkout(experiment, *, subject, session=1, folder, takeover=False):
         raise ValueError('No such subject session in this experiment')
     root = Path(folder).expanduser().resolve()
     state = root / 'stimuli' / '.dbstim'
+    media = json.loads(json.dumps(experiment._media_manifest))
+
+    def media_file(trial):
+        # Segment trials (foils and their halves) download as their own rendition.
+        for row in media['media']:
+            if row['catalog_id'] == trial['media_id'] and row['segment'] == trial['segment']:
+                return row['media_id']
+        raise ApiError('Media manifest has no file for an assigned trial')
+
+    blocks = [dict(raw, run_id=block.run_id,
+                   trials=[dict(trial, manifest_media_id=media_file(trial)) for trial in raw['trials']])
+              for raw, block in selected]
     metadata = dict(schema_version=1, origin=http.origin, username=experiment._client.username,
                     experiment_id=experiment.id, subject=subject, session=session,
-                    manifest_sha256=manifest['manifest_sha256'],
-                    blocks=[dict(raw, run_id=block.run_id) for raw, block in selected])
+                    manifest_sha256=manifest['manifest_sha256'], blocks=blocks)
     if (state / 'session.json').exists() and json.loads((state / 'session.json').read_text(encoding='utf-8')) != metadata:
         raise ValueError('Folder belongs to another subject session or revision')
-    media = json.loads(json.dumps(experiment._media_manifest))
-    wanted = {trial.stimulus_id for _, block in selected for trial in block.trials}
+    wanted = {trial['manifest_media_id'] for block in blocks for trial in block['trials']}
     media['media'] = [row for row in media['media'] if row['media_id'] in wanted]
     claim = dict(request_id=uuid.uuid4().hex, writer_id=_computer_id(), takeover=takeover)
     response = http._json('POST', path + '/sessions/' + session_id + '/start', claim)
@@ -249,8 +259,8 @@ class Run:
         self.session, self.number = session, number
         self._block = session._metadata['blocks'][number - 1]
         self._journal = session._state / f'run-{number:03d}.jsonl'
-        self._trials = tuple(Trial(i, session.folder / 'stimuli' / session._media[row['media_id']]['file_name'],
-                                   session._media[row['media_id']]['catalog_id'],
+        self._trials = tuple(Trial(i, session.folder / 'stimuli' / session._media[row['manifest_media_id']]['file_name'],
+                                   session._media[row['manifest_media_id']]['catalog_id'],
                                    'video' if row['role'] == 'parent' else row['role'])
                              for i, row in enumerate(self._block['trials'], 1))
         self._records = []
@@ -365,7 +375,7 @@ class Run:
             raise ValueError('Record the next assigned trial: started, then completed or abandoned')
         row = self._block['trials'][index]
         if status == 'started':
-            values['planned_duration'] = self.session._media[row['media_id']]['duration_seconds']
+            values['planned_duration'] = self.session._media[row['manifest_media_id']]['duration_seconds']
         attempt = uuid.uuid4().hex if status == 'started' else events[-1]['attempt_id']
         self._append(dict(event_id=uuid.uuid4().hex, attempt_id=attempt, trial_id=row['trial_id'],
                           status=status, occurred_at=self._now(), **values))
@@ -434,7 +444,7 @@ class Run:
         rows = []
         for trial, plan, start, end, part in zip(self._trials, self._block['trials'], self._events[::2],
                                                  self._events[1::2], started):
-            media = self.session._media[plan['media_id']]
+            media = self.session._media[plan['manifest_media_id']]
             result = end.get('result')
             rows.append(dict(onset=start['onset'], duration=end.get('duration', 'n/a'), trial_type=trial.role,
                              stim_file=media['file_name'], video_id=trial.video_id,
