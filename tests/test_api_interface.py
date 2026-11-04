@@ -1,31 +1,40 @@
-import ast
 import dataclasses
-import inspect
+import json
 from pathlib import Path
 import re
-import textwrap
+import tempfile
 import unittest
 
 import dbstim
+from tests.http_fixture import server
+from tests.test_examples import checked_out_session
 
 
 ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / 'docs' / 'api-interface.html').read_text()
 MARKDOWN = (ROOT / 'docs' / 'api-interface.md').read_text()
-# The variable names the docs use for each workflow object.
-OBJECTS = {'client': dbstim.Client, 'experiment': dbstim.Experiment, 'session': dbstim.Session, 'run': dbstim.Run}
 
 
-def members(cls) -> set[str]:
-    """Public methods and properties, plus public attributes assigned in __init__."""
-    names = {name for name in vars(cls) if not name.startswith('_')}
-    tree = ast.parse(textwrap.dedent(inspect.getsource(cls.__init__)))
-    names.update(node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
-                 and isinstance(node.value, ast.Name) and node.value.id == 'self' and not node.attr.startswith('_'))
-    return names
+def public(obj) -> set[str]:
+    """Public names of a live object: its methods, properties and instance attributes."""
+    return {name for name in dir(obj) if not name.startswith('_')}
+
+
+def sign_in(method, path, headers, body):
+    payload = json.dumps(dict(csrf_token='csrf', user=dict(username='demo'))).encode()
+    return 200, {'Content-Type': 'application/json'}, payload
 
 
 class ApiInterfaceDocsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        origin, _ = cls.enterClassContext(server(sign_in))
+        client = cls.enterClassContext(dbstim.Client('demo', 'password', url=origin))
+        session = checked_out_session(Path(cls.enterClassContext(tempfile.TemporaryDirectory())))
+        # The variable names the docs use for each workflow object.
+        cls.members = dict(client=public(client), experiment=public(dbstim.Experiment(client, 'experiment-1')),
+                           session=public(session), run=public(session.run(1)))
+
     def test_html_is_self_contained(self):
         self.assertNotRegex(HTML, r'''(?i)(src|href)\s*=\s*["']?(https?:)?//''')
         self.assertNotRegex(HTML, r'(?i)<link\b|@import|url\((?!#)|fetch\(|XMLHttpRequest|<iframe')
@@ -34,8 +43,8 @@ class ApiInterfaceDocsTests(unittest.TestCase):
     def test_public_members_are_shown(self):
         for name in dbstim.__all__:
             self.assertIn(name, HTML)
-        for variable, cls in OBJECTS.items():
-            for name in members(cls):
+        for variable, names in self.members.items():
+            for name in names:
                 with self.subTest(member=f'{variable}.{name}'):
                     self.assertIn(f'{variable}.{name}', HTML)
         for cls in (dbstim.Trial, dbstim.Filter, dbstim.Segment, dbstim.Metric, dbstim.MetricFilter):
@@ -48,7 +57,7 @@ class ApiInterfaceDocsTests(unittest.TestCase):
         for path, text in (('api-interface.html', HTML), ('api-interface.md', MARKDOWN)):
             for variable, name in re.findall(r'\b(client|experiment|session|run|dbstim)\.(?!py\b)([a-z_]+)', text):
                 with self.subTest(doc=path, reference=f'{variable}.{name}'):
-                    known = set(dbstim.__all__) if variable == 'dbstim' else members(OBJECTS[variable])
+                    known = set(dbstim.__all__) if variable == 'dbstim' else self.members[variable]
                     self.assertIn(name, known)
 
     def test_retired_0_5_calls_are_gone(self):
