@@ -16,6 +16,10 @@ from ._transport import ApiError
 
 MAX_RETRY_AFTER_SECONDS = 60
 MAX_PREPARATION_WAIT_SECONDS = 300
+STIMULI_LAYOUT = ('stimuli/manifest.json records the frozen experiment revision and file checksums.\n'
+                  'stimuli/manifest.csv lists local movies for PGL. Paths are relative to stimuli/.\n')
+STIMULI_README = ('Stimuli downloaded with dbstim.\n' + STIMULI_LAYOUT +
+                  'This folder contains stimuli only; behavioral responses belong to the presentation task.\n')
 
 
 def _hash(path: Path) -> str:
@@ -114,7 +118,8 @@ def _video(http, path, target, row):
                 raise ApiError('Media SHA-256 or size does not match manifest')
 
 
-def download(http, path, document, folder):
+def download(http, path, document, folder, *, readme=STIMULI_README):
+    """Fill folder with verified stimuli; readme is written only when the folder has no README."""
     root = Path(folder).expanduser()
     stimuli = root / 'stimuli'
     manifest = stimuli / 'manifest.json'
@@ -151,8 +156,5 @@ def download(http, path, document, folder):
             stream.write('\n')
     if not (root / 'README').exists():
         with _atomic(root / 'README') as stream:
-            stream.write('Stimuli downloaded with dbstim.\n'
-                         'stimuli/manifest.json records the frozen experiment revision and file checksums.\n'
-                         'stimuli/manifest.csv lists local movies for PGL. Paths are relative to stimuli/.\n'
-                         'This folder contains stimuli only; behavioral responses belong to the presentation task.\n')
+            stream.write(readme)
     return root

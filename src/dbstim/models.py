@@ -7,9 +7,6 @@ from typing import Literal, TypeAlias
 
 JSONValue: TypeAlias = str | int | float | bool | None | list['JSONValue'] | dict[str, 'JSONValue']
 JSONObject: TypeAlias = dict[str, JSONValue]
-TrialStatus: TypeAlias = Literal['started', 'completed', 'abandoned']
-SessionStatus: TypeAlias = Literal['completed', 'interrupted', 'failed']
-MediaMode: TypeAlias = Literal['local', 'cache', 'remote']
 Operator: TypeAlias = Literal['gt', 'lt', 'eq', 'gte', 'lte', 'is', 'is_not', '>', '<', '==', '!=', '>=', '<=']
 _SYMBOLS = {'>': 'gt', '<': 'lt', '==': 'eq', '>=': 'gte', '<=': 'lte'}
 _TRUE_FALSE = {'==': 'is', '!=': 'is_not'}
@@ -99,7 +96,7 @@ class Segment:
 
 
 @dataclass(frozen=True)
-class Trial:
+class _Assignment:
     trial_id: str
     stimulus_id: str
     position: int

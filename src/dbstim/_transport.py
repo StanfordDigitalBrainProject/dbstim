@@ -153,7 +153,9 @@ class Transport:
             raise _Unreachable() from None
         # Errors raised by the caller's block, such as a full disk, are not connection failures.
         with response:
-            if response.status not in (200, 201):
+            run_sync = (method == 'POST' and not media and re.fullmatch(
+                r'/api/v1/experiments/[A-Za-z0-9_-]+/subjects/[A-Za-z0-9_-]+/sessions/[A-Za-z0-9_-]+/runs/[A-Za-z0-9_-]+/sync', path))
+            if response.status not in (200, 201) and not (response.status == 202 and run_sync):
                 raise ApiError("Unexpected HTTP response", status=response.status)
             if response.headers.get("Content-Encoding", "identity").lower() != "identity":
                 raise ApiError("Encoded responses are not supported")
