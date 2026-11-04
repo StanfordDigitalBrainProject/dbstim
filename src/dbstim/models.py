@@ -23,6 +23,31 @@ def identifier(value: str) -> str:
 
 
 @dataclass(frozen=True)
+class Filter:
+    """A metric condition, for example Filter('duration_seconds', '>=', 10)."""
+
+    metric: str
+    op: Literal['>', '>=', '<', '<=', '==', '!=']
+    value: float | bool
+
+    def __post_init__(self):
+        if not isinstance(self.metric, str) or not self.metric.strip() or not self.metric.isprintable():
+            raise ValueError('metric must be a nonempty printable string')
+        if not isinstance(self.op, str) or self.op not in ('>', '>=', '<', '<=', '==', '!='):
+            raise ValueError('Use >, >=, <, <=, == or !=')
+        if type(self.value) not in (int, float, bool) or not math.isfinite(self.value):
+            raise ValueError('value must be a finite number or boolean')
+        if type(self.value) is bool and self.op not in ('==', '!='):
+            raise ValueError('Boolean filters use == or !=')
+        if type(self.value) is not bool and self.op == '!=':
+            raise ValueError('!= is supported only for boolean filters')
+
+    def to_dict(self) -> JSONObject:
+        operator = _TRUE_FALSE[self.op] if type(self.value) is bool else _SYMBOLS[self.op]
+        return dict(metric_id=self.metric, operator=operator, value=self.value)
+
+
+@dataclass(frozen=True)
 class MetricFilter:
     metric_id: str
     operator: Operator

@@ -320,13 +320,13 @@ class RealServerTests(unittest.TestCase):
         self.proxy.faults.append(('GET', '/api/v1/metrics', '503'))
         with self.assertRaisesRegex(ApiError, 'HTTP 503: Injected server fault; retry shortly'):
             self.client.metrics()
-        twice = [self.client.create_experiment('Twice', subjects=1, trials_per_run=2).id for _ in range(2)]
-        with self.assertRaisesRegex(ValueError, "2 experiments are named 'Twice'.*client.experiment\\(id=") as caught:
-            self.client.experiment('Twice')
-        self.assertTrue(all(experiment_id in str(caught.exception) for experiment_id in twice))
-        metrics = {metric.id: repr(metric) for metric in self.client.metrics()}
-        self.assertTrue(metrics['audio_track_present'].endswith('(boolean); operators == !=>'))
-        self.assertTrue(metrics['duration_seconds'].endswith('seconds); operators > < >= <=>'))
+        self.client.create_experiment('Twice', subjects=1, trials_per_run=2)
+        with self.assertRaises(ApiError) as caught:
+            self.client.create_experiment('Twice', subjects=1, trials_per_run=2)
+        self.assertEqual(caught.exception.status, 409)
+        metrics = self.client.metrics()
+        self.assertIn('audio_track_present', metrics)
+        self.assertIn('duration_seconds', metrics)
         query = dict(filters=[MetricFilter('audio_track_present', '==', True).to_dict(),
                               MetricFilter('audio_track_present', '!=', False).to_dict()],
                      content_query='', corpus='both', mode='keyword', custom_metrics=[], limit=1)

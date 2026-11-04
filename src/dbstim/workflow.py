@@ -16,6 +16,7 @@ import time
 from typing import TYPE_CHECKING
 import uuid
 
+from ._download import download as _download, media_manifest
 from ._transport import ApiError, _Unreachable
 from .models import JSONObject, MediaMode, Segment, SessionStatus, Trial, TrialStatus, identifier
 
@@ -110,14 +111,64 @@ def _label(action: str, values: JSONObject) -> str:
 
 
 class Experiment:
-    def __init__(self, client: Client, experiment_id: str, *, _name: str | None = None):
+    def __init__(self, client: Client, experiment_id: str, *, _name: str | None = None,
+                 _document: JSONObject | None = None):
         self._client = client
         self.id = identifier(experiment_id)
         self._path = '/api/v1/experiments/' + self.id
         self._name = _name
+        self._saved_document = _document
+        self._replacement_requests = {}
 
     def __repr__(self) -> str:
         return f'<Experiment {self._name!r} {self.id}>' if self._name else f'<Experiment {self.id}>'
+
+    @cached_property
+    def _document(self):
+        return self._saved_document or self._client._http._json('GET', self._path)
+
+    @property
+    def name(self) -> str:
+        return self._document['name']
+
+    @property
+    def revision(self) -> int:
+        return self._document['revision']
+
+    @cached_property
+    def _media_manifest(self):
+        return media_manifest(self._client._http, self._path, self.id)
+
+    @property
+    def videos(self) -> tuple[str, ...]:
+        """Distinct catalog IDs in the stable manifest order (foil halves share a catalog ID)."""
+        return tuple(dict.fromkeys(row['catalog_id'] for row in self._media_manifest['media']))
+
+    def download(self, folder: str | Path) -> Path:
+        """Write a portable BIDS stimuli folder; verify and reuse files already present."""
+        return _download(self._client._http, self._path, self._media_manifest, folder)
+
+    def replace(self, videos: list[str], *, reason: str = '') -> Experiment:
+        """Replace the named catalog videos with eligible alternatives in a new revision."""
+        if (not isinstance(videos, list) or not videos or any(not isinstance(video, str) for video in videos)
+                or len(set(videos)) != len(videos) or not set(videos) <= set(self.videos)):
+            raise ValueError('videos must be distinct catalog IDs from this experiment')
+        if not isinstance(reason, str) or len(reason) > 1000 or (reason and not reason.isprintable()):
+            raise ValueError('reason must be a printable string of at most 1000 characters')
+        key = (tuple(sorted(videos)), reason)
+        request_id = self._replacement_requests.setdefault(key, uuid.uuid4().hex)
+        document = self._client._http._json('POST', self._path + '/replacements',
+            dict(request_id=request_id, expected_digest=self._document['digest'], clip_ids=videos, reason=reason))
+        return Experiment(self._client, document['id'], _document=document)
+
+    def schedule(self, *, subjects: int, sessions: int = 1, runs: int = 1, trials_per_run: int,
+                 foils_per_run: int = 0, repeats_per_run: int = 0, shared_fraction: float = 0) -> Experiment:
+        """Add subjects, sessions and runs to this selection as a new frozen revision."""
+        settings = dict(subject_count=subjects, sessions_per_subject=sessions, runs_per_session=runs,
+                        trials_per_run=trials_per_run, foils_per_run=foils_per_run,
+                        repeats_per_run=repeats_per_run, shared_fraction=shared_fraction)
+        document = self._client._http._json('POST', self._path + '/schedule', dict(settings=settings))
+        return Experiment(self._client, document['id'], _document=document)
 
     def summary(self) -> JSONObject:
         document = self._client._http._json('GET', self._path)

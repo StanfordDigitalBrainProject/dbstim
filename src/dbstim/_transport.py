@@ -112,6 +112,13 @@ class Transport:
         try:
             response = self._opener.open(request, timeout=self.timeout)
         except HTTPError as error:
+            if (error.code == 307 and media and method == 'GET'
+                    and re.fullmatch(r'/api/v1/experiments/[A-Za-z0-9_-]+/media/[^/]+', path)):
+                location = error.headers.get('Location', '')
+                error.close()
+                with self._signed_media(location) as response:
+                    yield response
+                return
             status = error.code
             detail = None
             try:
@@ -142,6 +149,34 @@ class Transport:
                 raise ApiError("Unexpected HTTP response", status=response.status)
             if response.headers.get("Content-Encoding", "identity").lower() != "identity":
                 raise ApiError("Encoded responses are not supported")
+            yield response
+
+    @contextmanager
+    def _signed_media(self, location: str) -> Iterator[HTTPResponse]:
+        """The server's GCS handoff uses an anonymous request, without account cookies."""
+        try:
+            parsed = urlsplit(location)
+            valid = (parsed.scheme == 'https' and parsed.netloc == 'storage.googleapis.com'
+                     and not parsed.fragment and all(32 < ord(c) < 127 for c in location))
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ApiError('Invalid signed media redirect')
+        opener = build_opener(ProxyHandler({}), _NoRedirect())
+        request = Request(location, headers={'Accept': 'video/mp4', 'Accept-Encoding': 'identity'})
+        try:
+            response = opener.open(request, timeout=self.timeout)
+        except HTTPError as error:
+            status = error.code
+            error.close()
+            raise ApiError(f'Media server returned HTTP {status}', status=status) from None
+        except (OSError, URLError, HTTPException):
+            raise _Unreachable() from None
+        with response:
+            if response.status != 200:
+                raise ApiError('Unexpected media response', status=response.status)
+            if response.headers.get('Content-Encoding', 'identity').lower() != 'identity':
+                raise ApiError('Encoded responses are not supported')
             yield response
 
     @staticmethod

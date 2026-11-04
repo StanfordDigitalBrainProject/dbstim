@@ -42,7 +42,7 @@ class UsabilityTests(unittest.TestCase):
             Client('demo', 'secret', url=url).create_experiment('Demo', subjects=1, trials_per_run=3, seed=7)
             self.assertEqual(fixture.created['settings']['seed'], '7')
 
-    def test_metrics_are_small_objects_with_readable_repr(self):
+    def test_metrics_returns_names(self):
         def respond(method, path, headers, body):
             if path == '/api/v1/metrics':
                 return response(dict(metrics=[dict(id='duration_seconds', label='Duration', kind='number',
@@ -51,8 +51,7 @@ class UsabilityTests(unittest.TestCase):
 
         with server(respond) as (url, _):
             [metric] = Client('demo', 'secret', url=url).metrics()
-        self.assertEqual(metric, Metric('duration_seconds', 'Duration', 'number', 'seconds', ('gt', 'gte')))
-        self.assertEqual(repr(metric), '<Metric duration_seconds: Duration (number, seconds); operators > >=>')
+        self.assertEqual(metric, 'duration_seconds')
         self.assertEqual(repr(Metric('audio_track_present', 'Audio track', 'boolean', None, ('is', 'is_not'))),
                          '<Metric audio_track_present: Audio track (boolean); operators == !=>')
 

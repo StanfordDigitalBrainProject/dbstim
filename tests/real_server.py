@@ -1,7 +1,8 @@
 """Opt-in fixture: the real dbp-dataset-browser code on temporary databases over localhost HTTP.
 
 Set DBSTIM_SERVER to a server checkout, and DBSTIM_SERVER_PYTHON to an interpreter with
-its requirements-web.txt packages when this one lacks them. Nothing contacts a deployed server.
+its requirements-web.txt packages when this one lacks them. D1 real-media tests also need
+ffmpeg and its sibling ffprobe on PATH. Nothing contacts a deployed server.
 """
 
 from contextlib import closing, contextmanager
@@ -20,10 +21,10 @@ ACCOUNTS = dict(admin='test-password-123', other='test-password-456')
 
 
 @contextmanager
-def real_server(*, legacy_events: bool = False):
+def real_server(*, legacy_events: bool = False, real_media: bool = False):
     """Yield (origin, data directory) for a freshly built server; stop and delete it afterwards."""
     command = [PYTHON, str(Path(__file__).with_name('serve_real_server.py')), CHECKOUT]
-    process = subprocess.Popen(command + ['--legacy-events'] * legacy_events, stdout=subprocess.PIPE, text=True)
+    process = subprocess.Popen(command + ['--legacy-events'] * legacy_events + ['--real-media'] * real_media, stdout=subprocess.PIPE, text=True)
     try:
         ready = json.loads(process.stdout.readline() or '{}')
         if 'port' not in ready:
@@ -66,6 +67,7 @@ class FaultProxy:
     the server sees the request, "response" lets the server process it and then closes
     the connection without the reply, and an integer status replies with that status
     instead ("request") or after the server processed it (passed as "response:503").
+    "corrupt" changes a response byte after the server has verified the media.
     seen records (method, path, kind, body) for every request the proxy received.
     """
 
@@ -111,6 +113,8 @@ class FaultProxy:
                     reply += chunk
             if kind == 'response':
                 return
+            if kind == 'corrupt':
+                reply = reply[:-1] + bytes([reply[-1] ^ 1])
             client.sendall(_status(int(kind.split(':')[1])) if kind.startswith('response:') else reply)
 
 

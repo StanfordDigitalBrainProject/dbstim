@@ -5,9 +5,11 @@ from datetime import datetime
 from getpass import getpass
 import math
 import warnings
+import uuid
+from urllib.parse import urlencode
 
 from ._transport import ApiError, Transport
-from .models import JSONObject, Metric, MetricFilter, identifier
+from .models import Filter, JSONObject, MetricFilter, identifier
 from .workflow import Experiment
 
 
@@ -26,6 +28,7 @@ def _when(timestamp) -> str:
 
 class Client:
     def __init__(self, username: str, password: str, *, url: str = 'https://dbstimuli.com', timeout: float = 120):
+        self._pending_creates = {}
         self._http = Transport(url, timeout=timeout)
         self.username = self._http.login(username, password)['user']['username']
         self.url = self._http.origin
@@ -42,14 +45,66 @@ class Client:
     def __exit__(self, *args):
         self.close()
 
-    def metrics(self) -> list[Metric]:
-        """Metrics you can filter on, such as duration_seconds."""
+    def metrics(self) -> list[str]:
+        """Metric names available for Filter conditions."""
         try:
-            return [Metric(row['id'], row.get('label') or row['id'], row.get('kind', ''), row.get('unit'),
-                           tuple(row.get('operators', ())))
-                    for row in self._http._json('GET', '/api/v1/metrics')['metrics']]
-        except (TypeError, KeyError, AttributeError) as error:
+            names = [row['id'] for row in self._http._json('GET', '/api/v1/metrics')['metrics']]
+            if any(not isinstance(name, str) or not name for name in names):
+                raise ValueError('Invalid metric name')
+            return names
+        except (TypeError, KeyError, AttributeError, ValueError) as error:
             raise ApiError('Invalid metric list') from error
+
+    def create(self, name: str, *, filters: list[Filter] = (), count: int,
+               seed: int | str = 0) -> Experiment:
+        """Save an immediately downloadable selection. Reopen existing names with open()."""
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError('name must be a nonempty string')
+        if type(count) is not int or not 1 <= count <= 50000:
+            raise ValueError('count must be an integer between 1 and 50000')
+        if type(seed) not in (int, str) or not str(seed).strip():
+            raise ValueError('seed must be a nonempty string or integer')
+        if not isinstance(filters, (list, tuple)) or any(not isinstance(item, Filter) for item in filters):
+            raise ValueError('filters must contain Filter values')
+        query = dict(filters=[item.to_dict() for item in filters], content_query='', corpus='both',
+                     mode='keyword', custom_metrics=[])
+        key = (name, tuple(filters), count, seed)
+        pending = self._pending_creates
+        if key not in pending:
+            version = self._http._json('POST', '/api/v1/media/query', dict(query, limit=1))['version']
+            pending[key] = dict(query, version=version, request_id=uuid.uuid4().hex,
+                                settings=dict(name=name, seed=str(seed), count=count))
+        try:
+            document = self._http._json('POST', '/api/v1/experiments', pending[key])
+        except ApiError as error:
+            if error.status is not None and 400 <= error.status < 500:
+                pending.pop(key)
+            if error.status == 409 and 'name already exists' in str(error):
+                raise ApiError(f'{error} Use open({name!r}) to reopen an existing experiment.', status=409) from None
+            raise
+        pending.pop(key)
+        return Experiment(self, identifier(document['id']), _document=document)
+
+    def open(self, name: str | None = None, *, revision: int | None = None,
+             id: str | None = None) -> Experiment:
+        """Open the latest named revision, an earlier numbered revision, or an exact saved ID."""
+        if (name is None) == (id is None):
+            raise ValueError('Provide an experiment name or id')
+        if revision is not None and (type(revision) is not int or revision < 1):
+            raise ValueError('revision must be a positive integer')
+        if id is not None:
+            if revision is not None:
+                raise ValueError('An experiment ID already identifies an exact revision')
+            path = '/api/v1/experiments/' + identifier(id)
+        else:
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError('name must be a nonempty string')
+            query = dict(name=name)
+            if revision is not None:
+                query['revision'] = revision
+            path = '/api/v1/experiments/by-name?' + urlencode(query)
+        document = self._http._json('GET', path)
+        return Experiment(self, identifier(document['id']), _document=document)
 
     def experiments(self) -> list[JSONObject]:
         rows = []
