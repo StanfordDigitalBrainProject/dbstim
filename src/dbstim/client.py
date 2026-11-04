@@ -87,7 +87,11 @@ class Client:
 
     def open(self, name: str | None = None, *, revision: int | None = None,
              id: str | None = None) -> Experiment:
-        """Open the latest named revision, an earlier numbered revision, or an exact saved ID."""
+        """Open a named experiment's latest revision, or an earlier one by revision number.
+
+        id= instead reopens the exact saved experiment revision with that ID, including archived
+        experiments and superseded revisions, so a download manifest's experiment_id stays reproducible.
+        """
         if (name is None) == (id is None):
             raise ValueError('Provide an experiment name or id')
         if revision is not None and (type(revision) is not int or revision < 1):

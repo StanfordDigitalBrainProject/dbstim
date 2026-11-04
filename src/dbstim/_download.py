@@ -9,9 +9,13 @@ import os
 from pathlib import Path
 import re
 import tempfile
+from time import monotonic, sleep
 from urllib.parse import quote
 
 from ._transport import ApiError
+
+MAX_RETRY_AFTER_SECONDS = 60
+MAX_PREPARATION_WAIT_SECONDS = 300
 
 
 def _hash(path: Path) -> str:
@@ -34,8 +38,25 @@ def _atomic(path: Path, *, binary=False):
         Path(temporary).unlink(missing_ok=True)
 
 
+def _when_prepared(call, *args):
+    """Retry while the server answers 503 with Retry-After, within per-wait and total bounds."""
+    deadline = monotonic() + MAX_PREPARATION_WAIT_SECONDS
+    while True:
+        try:
+            return call(*args)
+        except ApiError as error:
+            if error.status != 503 or error.retry_after is None:
+                raise
+            delay = max(error.retry_after, 1)
+            if delay > MAX_RETRY_AFTER_SECONDS or monotonic() + delay > deadline:
+                raise ApiError(f'{error} Stopped waiting after {MAX_PREPARATION_WAIT_SECONDS // 60} minutes; '
+                               f'the server last asked to retry after {error.retry_after} seconds.',
+                               status=503, retry_after=error.retry_after) from None
+            sleep(delay)
+
+
 def media_manifest(http, path, experiment_id):
-    document = http._json('GET', path + '/media-manifest')
+    document = _when_prepared(http._json, 'GET', path + '/media-manifest')
     try:
         if (document['schema_version'] != 'dbp-experiment-media-v1'
                 or document['experiment_id'] != experiment_id
@@ -115,7 +136,7 @@ def download(http, path, document, folder):
         json.dump(document, stream, indent=2, ensure_ascii=False, allow_nan=False)
         stream.write('\n')
     for row in document['media']:
-        _video(http, path, stimuli / row['file_name'], row)
+        _when_prepared(_video, http, path, stimuli / row['file_name'], row)
     with _atomic(stimuli / 'manifest.csv') as stream:
         writer = csv.DictWriter(stream, fieldnames=['filename', 'index', 'id', 'sha256', 'bytes', 'duration'])
         writer.writeheader()

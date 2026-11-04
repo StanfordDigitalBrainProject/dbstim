@@ -15,11 +15,12 @@ from .models import JSONObject, JSONValue
 
 
 class ApiError(RuntimeError):
-    """Sanitized request failure; HTTP status is available without response text."""
+    """Sanitized request failure; HTTP status and Retry-After seconds are available without response text."""
 
-    def __init__(self, message: str, *, status: int | None = None) -> None:
+    def __init__(self, message: str, *, status: int | None = None, retry_after: int | None = None) -> None:
         super().__init__(message)
         self.status = status
+        self.retry_after = retry_after
 
 
 class _Unreachable(ApiError):
@@ -121,6 +122,8 @@ class Transport:
                 return
             status = error.code
             detail = None
+            retry_after = (error.headers.get('Retry-After') or '').strip() if status == 503 else ''
+            retry_after = int(retry_after) if re.fullmatch(r'[0-9]{1,6}', retry_after) else None
             try:
                 if status in (400, 404, 409, 503) and not path.startswith("/api/auth/"):
                     raw = error.read(4097)
@@ -140,7 +143,8 @@ class Transport:
                 self.close()
                 detail = "you are signed out; connect again"
             message = f"Server returned HTTP {status}"
-            raise ApiError(message + (f": {detail}" if detail else "; response body withheld"), status=status) from None
+            raise ApiError(message + (f": {detail}" if detail else "; response body withheld"), status=status,
+                           retry_after=retry_after) from None
         except (OSError, URLError, HTTPException):
             raise _Unreachable() from None
         # Errors raised by the caller's block, such as a full disk, are not connection failures.

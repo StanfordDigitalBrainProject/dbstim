@@ -10,7 +10,9 @@ import unittest
 from unittest.mock import patch
 
 import dbstim
+from tests.http_fixture import server
 from tests.real_server import ACCOUNTS, CHECKOUT, FaultProxy, real_server
+from tests.test_dstim import response
 
 
 class FilterTests(unittest.TestCase):
@@ -28,6 +30,70 @@ class FilterTests(unittest.TestCase):
                      ('x', '<', float('inf')), ('x', [], True), ('\nx', '==', 1)]:
             with self.subTest(args=args), self.assertRaises(ValueError):
                 dbstim.Filter(*args)
+
+
+class PreparingMediaTests(unittest.TestCase):
+    """The server answers 503 with Retry-After while it renders media such as foil halves."""
+
+    movie = b'rendered movie bytes'
+
+    def serve(self, preparing):
+        document = dict(schema_version='dbp-experiment-media-v1', experiment_id='experiment-1', name='Demo',
+                        revision=1, dataset_version='v1', seed='0', filters=[],
+                        media=[dict(media_id='m1', catalog_id='clip-1', file_name='m1.mp4', segment=None,
+                                    sha256=hashlib.sha256(self.movie).hexdigest(), size_bytes=len(self.movie),
+                                    duration_seconds=1.5)])
+
+        def respond(method, path, headers, body):
+            if path == '/api/auth/login':
+                return response(dict(csrf_token='csrf', user=dict(username='demo')))
+            if path == '/api/v1/experiments/experiment-1':
+                return response(dict(id='experiment-1', name='Demo', revision=1))
+            for suffix in ('/media-manifest', '/media/m1'):
+                if path.endswith(suffix) and preparing.get(suffix):
+                    wait = preparing[suffix].pop(0) if isinstance(preparing[suffix], list) else preparing[suffix]
+                    return response(dict(detail=dict(code='media_preparing', message='Still being prepared.')),
+                                    503, **{'Retry-After': wait})
+            if path.endswith('/media-manifest'):
+                return response(document)
+            if path.endswith('/media/m1'):
+                return 200, {'Content-Type': 'video/mp4', 'Content-Length': len(self.movie)}, self.movie
+            return response(dict(detail='not found'), 404)
+
+        origin, requests = self.enterContext(server(respond))
+        clock = [0.0]
+        waits = []
+
+        def sleep(seconds):
+            waits.append(seconds)
+            clock[0] += seconds
+
+        self.enterContext(patch('dbstim._download.sleep', side_effect=sleep))
+        self.enterContext(patch('dbstim._download.monotonic', side_effect=lambda: clock[0]))
+        client = self.enterContext(dbstim.Client('demo', 'password', url=origin))
+        folder = Path(self.enterContext(tempfile.TemporaryDirectory())) / 'bids'
+        return client.open(id='experiment-1'), folder, requests, waits
+
+    def test_download_waits_as_directed_then_succeeds(self):
+        exp, folder, requests, waits = self.serve({'/media-manifest': [7, 7], '/media/m1': [3]})
+        exp.download(folder)
+        self.assertEqual(waits, [7, 7, 3])
+        self.assertEqual((folder / 'stimuli/m1.mp4').read_bytes(), self.movie)
+        self.assertEqual(exp.videos, ('clip-1',))
+        self.assertEqual(sum(path.endswith('/media-manifest') for _, path, _, _ in requests), 3)
+
+    def test_download_stops_within_bounds_and_reports_last_retry_after(self):
+        for retry_after in (10, 3600):
+            with self.subTest(retry_after=retry_after):
+                exp, folder, requests, waits = self.serve({'/media-manifest': retry_after})
+                with self.assertRaisesRegex(dbstim.ApiError, f'retry after {retry_after} seconds') as caught:
+                    exp.download(folder)
+                self.assertEqual((caught.exception.status, caught.exception.retry_after), (503, retry_after))
+                self.assertLessEqual(sum(waits), 300)
+                self.assertTrue(all(wait == retry_after for wait in waits))
+                self.assertEqual(len(waits), 30 if retry_after == 10 else 0)
+                self.assertFalse(folder.exists())
+                self.assertFalse(any('/media/' in path for _, path, _, _ in requests))
 
 
 @unittest.skipUnless(CHECKOUT, 'Set DBSTIM_SERVER to run real-server D1 tests')
@@ -82,6 +148,18 @@ class CoreTests(unittest.TestCase):
         self.assertEqual((self.folder / 'stimuli/manifest.json').read_bytes(), original)
         with self.assertRaises(dbstim.ApiError):
             revised.download(self.folder)
+
+    def test_replace_leaves_pool_membership_to_the_server_without_fetching_media(self):
+        exp = self.create()
+        video = exp.videos[0]
+        reopened = self.client.open(exp.name)
+        self.proxy.seen.clear()
+        with self.assertRaisesRegex(dbstim.ApiError, 'belonging to this experiment') as caught:
+            reopened.replace(['not-in-this-experiment'])
+        self.assertEqual(caught.exception.status, 400)
+        revised = reopened.replace([video])
+        self.assertEqual(revised.revision, 2)
+        self.assertFalse(any('/media' in path for _, path, _, _ in self.proxy.seen))
 
     def test_schedule_is_optional_and_creates_revision(self):
         exp = self.create()

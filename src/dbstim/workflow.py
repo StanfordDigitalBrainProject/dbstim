@@ -151,7 +151,7 @@ class Experiment:
     def replace(self, videos: list[str], *, reason: str = '') -> Experiment:
         """Replace the named catalog videos with eligible alternatives in a new revision."""
         if (not isinstance(videos, list) or not videos or any(not isinstance(video, str) for video in videos)
-                or len(set(videos)) != len(videos) or not set(videos) <= set(self.videos)):
+                or len(set(videos)) != len(videos)):
             raise ValueError('videos must be distinct catalog IDs from this experiment')
         if not isinstance(reason, str) or len(reason) > 1000 or (reason and not reason.isprintable()):
             raise ValueError('reason must be a printable string of at most 1000 characters')
