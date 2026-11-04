@@ -1,6 +1,7 @@
 """Offline records and the S3 run-sync wire contract."""
 import csv
 from fractions import Fraction
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,8 @@ import uuid
 
 import dbstim
 from dbstim._session import _computer_id
+from tests.http_fixture import server
+from tests.test_dstim import manifest, response
 
 
 class LocalRuns(unittest.TestCase):
@@ -225,6 +228,58 @@ class LinuxComputerIdentity(unittest.TestCase):
         _computer_id.cache_clear()
         with self.assertRaisesRegex(RuntimeError, 'stable machine identity'):
             self.identity({'/etc/machine-id': '\n'})
+
+
+class GeneratedReadme(unittest.TestCase):
+    movie = b'movie bytes'
+
+    def setUp(self):
+        media = dict(schema_version='dbp-experiment-media-v1', experiment_id='experiment-1', name='Demo',
+                     revision=1, dataset_version='v1', seed='0', filters=[],
+                     media=[dict(media_id='m1', catalog_id='clip-1', file_name='m1.mp4', segment=None,
+                                 sha256=hashlib.sha256(self.movie).hexdigest(), size_bytes=len(self.movie),
+                                 duration_seconds=1.5)])
+        plan = manifest([dict(block_index=1, session_id='session-001', run_id='run-001', trials=[
+            dict(trial_id='trial-1', media_id='clip-1', media_type='video', role='parent', segment=None)])])
+        experiment = '/api/v1/experiments/experiment-1'
+
+        def respond(method, path, headers, body):
+            if path == '/api/auth/login':
+                return response(dict(csrf_token='csrf', user=dict(username='demo')))
+            if path == experiment:
+                return response(dict(id='experiment-1', name='Demo', revision=1))
+            if path == experiment + '/media-manifest':
+                return response(media)
+            if path == experiment + '/media/m1':
+                return 200, {'Content-Type': 'video/mp4', 'Content-Length': len(self.movie)}, self.movie
+            if path == experiment + '/subjects/subject-001/manifest':
+                return response(plan)
+            if method == 'POST' and path == experiment + '/subjects/subject-001/sessions/session-001/start':
+                return response(dict(accepted=json.loads(body)['request_id']))
+            return response(dict(detail='not found'), 404)
+
+        origin, _ = self.enterContext(server(respond))
+        client = self.enterContext(dbstim.Client('demo', 'password', url=origin))
+        self.exp = client.open(id='experiment-1')
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
+    def test_plain_download_says_stimuli_only(self):
+        readme = (self.exp.download(self.root / 'plain') / 'README').read_text()
+        self.assertIn('This folder contains stimuli only', readme)
+        self.assertNotIn('events', readme)
+
+    def test_checkout_describes_run_outputs_and_keeps_existing_readme(self):
+        checked = self.exp.checkout(subject=1, folder=self.root / 'checkout')
+        readme = (checked.folder / 'README').read_text()
+        self.assertNotIn('stimuli only', readme)
+        for part in ('BIDS events file and JSON sidecar for each run', 'sourcedata/',
+                     'Behavioral responses and native run files belong to the presentation task'):
+            self.assertIn(part, readme)
+        own = self.root / 'own'
+        own.mkdir()
+        (own / 'README').write_text('My notes\n')
+        self.exp.checkout(subject=1, folder=own)
+        self.assertEqual((own / 'README').read_text(), 'My notes\n')
 
 
 from tests.real_server import ACCOUNTS, CHECKOUT, FaultProxy, count, real_server

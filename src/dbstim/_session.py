@@ -14,7 +14,7 @@ import time
 import uuid
 from typing import Literal
 
-from ._download import _atomic, download
+from ._download import STIMULI_LAYOUT, _atomic, download
 from ._transport import ApiError
 
 
@@ -99,6 +99,12 @@ def _lock(path):
                 fcntl.flock(stream, fcntl.LOCK_UN)
 
 
+_CHECKOUT_README = ('Subject session stimuli checked out with dbstim.\n' + STIMULI_LAYOUT +
+                    'dbstim writes a BIDS events file and JSON sidecar for each run under sub-*/ses-*/beh/.\n'
+                    'Runs kept as flagged attempts at sync are under sourcedata/.\n'
+                    'Behavioral responses and native run files belong to the presentation task.\n')
+
+
 def checkout(experiment, *, subject, session=1, folder, takeover=False):
     for value in (subject, session):
         if type(value) is not int or value < 1:
@@ -139,7 +145,7 @@ def checkout(experiment, *, subject, session=1, folder, takeover=False):
     response = http._json('POST', path + '/sessions/' + session_id + '/start', claim)
     if response.get('accepted') != claim['request_id']:
         raise ApiError('Server did not acknowledge the session checkout')
-    download(http, experiment._path, media, root)
+    download(http, experiment._path, media, root, readme=_CHECKOUT_README)
     state.mkdir(exist_ok=True)
     _sync_directory(state.parent)
     with _lock(state / 'session.lock'):
