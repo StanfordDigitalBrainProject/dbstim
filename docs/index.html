@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>dbstim — Python API Guide (v0.5.0)</title>
+  <title>dbstim — Python API Guide (v1.0.0)</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f4c81'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='15' fill='%23ffffff'%3Edb%3C/text%3E%3C/svg%3E">
-  <meta name="description" content="Guide to the dbstim Python API: install from GitHub, filter clips by metric, create and publish experiments, download verified videos, and record session progress.">
+  <meta name="description" content="Guide to the dbstim Python API: install from GitHub, choose videos by metric, download a portable BIDS stimuli folder, and record tracked runs offline with a crash-safe journal, then sync them.">
   <style>
     :root {
       --bg: #f8fafc;
@@ -463,7 +463,7 @@
     <div class="topbar-inner">
       <div class="brand">
         <a class="brand-title" href="./">dbstim</a>
-        <span class="badge">v0.5.0</span>
+        <span class="badge">v1.0.0</span>
         <span style="color: var(--text-muted); font-size: 0.9rem;">Python API Guide</span>
       </div>
       <div class="resource-links" aria-label="API visualization and reference links">
@@ -481,12 +481,13 @@
         <li><a href="#overview">Overview</a></li>
         <li><a href="#install">1. Install</a></li>
         <li><a href="#connect">2. Connect</a></li>
-        <li><a href="#metrics">3. Filter by metric</a></li>
-        <li><a href="#experiments">4. Create and publish</a></li>
-        <li><a href="#journeys">5. Download vs. present</a></li>
-        <li><a href="#timing">6. Network vs. local calls</a></li>
-        <li><a href="#recovery">7. Results and recovery</a></li>
-        <li><a href="#limitations">8. Limitations</a></li>
+        <li><a href="#choose">3. Choose videos</a></li>
+        <li><a href="#download">4. Journey A: download</a></li>
+        <li><a href="#tracked">5. Journey B: tracked run</a></li>
+        <li><a href="#events">6. Events and frame timing</a></li>
+        <li><a href="#timing">7. Network vs. local calls</a></li>
+        <li><a href="#recovery">8. Recovery and sync</a></li>
+        <li><a href="#limitations">9. Upgrading and limits</a></li>
       </ul>
       <div class="sidebar-divider"></div>
       <h2>Reference Docs</h2>
@@ -494,9 +495,9 @@
         <li><a href="api-interface.html">Interactive API Map (HTML)</a></li>
         <li><a href="api-interface.md" download="api-interface.md">API Reference (.md)</a></li>
         <li><a href="api-classes.md">API Objects</a></li>
-        <li><a href="server-to-local-flow.md">Server-to-Local Flow</a></li>
+        <li><a href="server-to-local-flow.md">Experiment to Events File</a></li>
         <li><a href="metrics-and-filters.md">Metrics &amp; Filters</a></li>
-        <li><a href="recovery.md">Recovering a Session</a></li>
+        <li><a href="recovery.md">Recovering a Run</a></li>
       </ul>
     </aside>
 
@@ -504,30 +505,32 @@
       <div class="hero" id="overview">
         <h1>Using <code>dbstim</code></h1>
         <p class="lead">
-          <code>dbstim</code> is a Python 3.11+ client for creating experiments on
-          <strong>dbstimuli.com</strong>, downloading SHA-256-verified stimulus videos, and recording
-          trial progress from your task program.
+          <code>dbstim</code> is a Python 3.11+ client for <strong>dbstimuli.com</strong>. Choose videos by metric, download
+          them as a portable BIDS stimuli folder, and record which videos your task showed. Recording happens offline;
+          you sync afterwards.
         </p>
         <div class="hero-cards">
           <div class="mini-card">
+            <strong>A. Download for your own code</strong>
+            <span><code>create()</code> then <code>download()</code>: verified MP4s with a <code>manifest.json</code> and a
+              PGL-loadable <code>manifest.csv</code>. No subjects or tracking.</span>
+          </div>
+          <div class="mini-card">
+            <strong>B. Track a run</strong>
+            <span>Check a subject session out online, record the run offline in a crash-safe journal, then
+              <code>sync()</code>. Nothing touches the network during the run.</span>
+          </div>
+          <div class="mini-card">
             <strong>Your task plays the video</strong>
             <span>PGL, PsychoPy, or your own player opens the window, controls frame timing, and collects responses.</span>
-          </div>
-          <div class="mini-card">
-            <strong>The server tracks progress</strong>
-            <span>Publishing freezes each subject's trials. The server records which trials started, completed, or were abandoned.</span>
-          </div>
-          <div class="mini-card">
-            <strong>One local cache per user</strong>
-            <span><code>session.download()</code> verifies MP4s into <code>~/.cache/dbstim</code>, where task scripts in any folder can reuse them.</span>
           </div>
         </div>
         <div class="callout info" style="margin-top: 1.1rem; margin-bottom: 0;">
           <strong>Reference map</strong>
           See the <a href="api-interface.html">interactive API map</a>, download
           <a href="api-interface.md" download="api-interface.md"><code>api-interface.md</code></a>, or read
-          <a href="api-classes.md">API Objects</a> and <a href="server-to-local-flow.md">Server-to-Local Flow</a>
-          for class diagrams and request sequences.
+          <a href="api-classes.md">API Objects</a> and <a href="server-to-local-flow.md">Experiment to Events File</a>.
+          The repository's <code>notebooks/api.ipynb</code> walks through both journeys.
         </div>
       </div>
 
@@ -535,40 +538,39 @@
         <h2>1. Install</h2>
         <p>
           <code>dbstim</code> requires <strong>Python 3.11+</strong> and uses only the standard library at runtime.
-          Install it from a pinned GitHub tag (currently <code>v0.5.0</code>) or commit SHA so your study environment
+          Install it from a pinned GitHub tag (currently <code>v1.0.0</code>) or commit SHA so your study environment
           stays reproducible; it is not published on PyPI.
         </p>
         <div class="code-wrap">
-          <pre><code class="language-bash"># Install with pip
-pip install "git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"
+          <pre><code class="language-bash" data-snippet="install"># Install with pip
+pip install "git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v1.0.0"
 
 # Or add to a uv project
-uv add "dbstim @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"
+uv add "dbstim @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v1.0.0"
 
 # Optional: include JupyterLab (&gt;=4,&lt;5) for notebooks/api.ipynb
-pip install "dbstim[jupyter] @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"</code></pre>
+pip install "dbstim[jupyter] @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v1.0.0"</code></pre>
         </div>
         <p style="margin-bottom: 0; font-size: 0.92rem; color: var(--text-muted);">
-          Sign in with your <code>dbstimuli.com</code> account—no Google Cloud SDK or separate API key is needed.
-          <code>dbstim</code> replaces the legacy <code>dbp_api</code> package (<code>d11933f</code>).
+          Sign in with your <code>dbstimuli.com</code> account; no Google Cloud SDK or API key is needed. Version 1.0
+          changes the API; the <a href="https://github.com/StanfordDigitalBrainProject/dbstim/blob/main/CHANGELOG.md">changelog</a>
+          lists what moved.
         </p>
       </section>
 
       <section class="card" id="connect">
         <h2>2. Connect</h2>
         <p>
-          In interactive terminals or notebooks, <code>dbstim.connect()</code> prompts for your username and reads
-          your password via <code>getpass</code>:
+          In terminals and notebooks, <code>dbstim.connect()</code> prompts for your username and reads your password via
+          <code>getpass</code>:
         </p>
         <div class="code-wrap">
           <pre><code class="language-python" data-snippet="connect-interactive">import dbstim
 
 client = dbstim.connect()
-client = dbstim.connect("your_username")  # prompts only for password</code></pre>
+client = dbstim.connect("your_username")  # prompts only for the password</code></pre>
         </div>
-        <p>
-          In scripts, pass credentials or environment variables to <code>Client</code> directly:
-        </p>
+        <p>In scripts, pass credentials to <code>Client</code> directly:</p>
         <div class="code-wrap">
           <pre><code class="language-python" data-snippet="connect-client">from dbstim import Client
 
@@ -583,208 +585,209 @@ with Client(
         <p style="margin-bottom: 0;">
           Session cookies and the CSRF token stay in memory and are cleared by <code>client.close()</code>, leaving
           <code>with client:</code>, or an HTTP <code>401</code>. Remote URLs must use <code>https://</code> without
-          embedded credentials, paths, or query strings. The client follows no redirects, except that an experiment
-          download may hand a video off to a signed Google Cloud Storage URL, fetched without your account cookies.
+          embedded credentials, paths, or query strings. The client follows no redirects, except that a video download
+          may hand off to a signed Google Cloud Storage URL, fetched without your account cookies.
         </p>
       </section>
 
-      <section class="card" id="metrics">
-        <h2>3. Filter by metric</h2>
+      <section class="card" id="choose">
+        <h2>3. Choose videos</h2>
         <p>
-          <code>client.metrics()</code> lists the catalog metrics you can filter on when creating an experiment.
-          Each <code>Metric(id, label, kind, unit, operators)</code> shows its allowed comparison operators:
+          <code>client.metrics()</code> lists the metric names you can filter on. A <code>Filter</code> compares one
+          metric with a threshold; a video must match every filter.
         </p>
         <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="metrics-discover">from dbstim import MetricFilter
+          <pre><code class="language-python" data-snippet="choose-create">from dbstim import Filter
 
-metrics = client.metrics()
-for metric in metrics:
-    print(repr(metric))
-# &lt;Metric duration_seconds: Duration (number, seconds); operators &gt; &gt;=&gt;
+client.metrics()  # ['duration_seconds', 'width_px', ...]
 
-filters = [
-    MetricFilter("duration_seconds", "&gt;=", 10),
-    MetricFilter("duration_seconds", "&lt;=", 20),
-    MetricFilter("audio_track_present", "==", True),
-]</code></pre>
-        </div>
-        <ul>
-          <li><strong>Operators:</strong> Numeric metrics accept <code>"&gt;="</code>, <code>"&lt;="</code>, <code>"&gt;"</code>, <code>"&lt;"</code>, and <code>"=="</code> (or <code>"gte"</code>, <code>"lte"</code>, <code>"gt"</code>, <code>"lt"</code>, <code>"eq"</code>). Boolean metrics accept <code>"=="</code> and <code>"!="</code> with <code>True</code> or <code>False</code> (<code>"!="</code> is only for booleans).</li>
-          <li><strong>Matching:</strong> Filters combine with <strong>AND</strong>, and clips with unknown (<code>NULL</code>) values do not match. Pass <code>content="..."</code> and <code>corpus="captions" | "transcripts" | "both"</code> to <code>create_experiment(...)</code> to filter by clip text as well. See <a href="metrics-and-filters.md">Metrics &amp; Filters</a> for how the server indexes and queries metrics.</li>
-        </ul>
-      </section>
-
-      <section class="card" id="experiments">
-        <h2>4. Create, publish, and reopen experiments</h2>
-        <h3>Create and publish</h3>
-        <p>
-          <code>client.create_experiment(...)</code> checks your design counts and saves a draft on the server.
-          Call <code>experiment.publish()</code> to freeze each subject's sessions, runs, and trials before reading
-          <code>experiment.subjects</code>:
-        </p>
-        <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="experiment-create-publish">experiment = client.create_experiment(
-    "Memory demo",
-    subjects=5,
-    sessions_per_subject=1,
-    runs_per_session=2,
-    trials_per_run=24,
-    foils_per_run=4,
-    repeats_per_run=0,
-    shared_fraction=0.1,
-    seed=1,
-    sampling="random",  # "random", "balanced", or "unique" YouTube channels
-    filters=[
-        MetricFilter("duration_seconds", "&gt;=", 10),
-        MetricFilter("duration_seconds", "&lt;=", 20),
-    ],
-    content="",
-    corpus="both",      # "captions", "transcripts", or "both"
+experiment = client.create(
+    "Clips",
+    filters=[Filter("duration_seconds", "&gt;=", 10), Filter("audio_track_present", "==", True)],
+    count=40,  # how many videos, 1-50,000
+    seed=1,    # same filters, count and seed: same selection
 )
-
-experiment.publish()
-summary = experiment.summary()
-print(summary["id"], summary["published"], summary["shared_fraction_realized"])</code></pre>
+experiment.name, experiment.revision, experiment.videos</code></pre>
         </div>
-        <ul>
-          <li><strong>Run composition:</strong> Foils (second halves of split parent clips) and repeats count toward <code>trials_per_run</code>. Each run presents <code>parents = trials_per_run - foils_per_run - repeats_per_run</code> parent clips (<code>parents &gt;= 1</code>, <code>max(foils_per_run, repeats_per_run) &lt;= parents</code>)—<code>parents - foils_per_run</code> full clips and <code>foils_per_run</code> first halves—plus <code>foils_per_run</code> second-half foils and <code>repeats_per_run</code> repeats.</li>
-          <li><strong>Limits and shared clips:</strong> Up to <code>100</code> subjects and <code>50,000</code> total presentations. <code>shared_fraction</code> (<code>0</code> to <code>1</code>) sets the share of parent clips every subject sees, rounded down to whole videos (warning on rounding and reporting the exact value in <code>summary["shared_fraction_realized"]</code>).</li>
-        </ul>
-
-        <h3>Reopen an existing experiment</h3>
         <p>
-          Every <code>create_experiment(...)</code> call creates a new experiment on the server, even if the name already exists.
-          Reopen an existing one with <code>client.experiment(name)</code>—if multiple experiments share that name, the
-          <code>ValueError</code> lists their revision IDs so you can pass <code>id=</code>:
+          An experiment is a <strong>frozen selection</strong>: later catalog changes never alter it. Names are unique in
+          your account; <code>create()</code> with a name you already use raises <code>ApiError</code> (HTTP 409) and
+          suggests <code>open()</code>. Use <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code> or
+          <code>==</code> with numbers, and <code>==</code> or <code>!=</code> with <code>True</code>/<code>False</code>.
         </p>
         <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="experiment-reopen">all_experiments = client.experiments()
+          <pre><code class="language-python" data-snippet="choose-open">experiment = client.open("Clips")              # latest revision
+experiment = client.open("Clips", revision=1)  # an earlier one
+experiment = client.open(id="...")             # exact revision, e.g. from manifest.json
 
-experiment = client.experiment("Memory demo")
-experiment = client.experiment(id="experiment-1")  # disambiguate duplicate names</code></pre>
+newer = experiment.replace(["video-id-to-drop"], reason="blurry")  # new revision</code></pre>
         </div>
-      </section>
-
-      <section class="card" id="journeys">
-        <h2>5. Download media vs. present a session</h2>
-        <p>
-          <code>dbstim</code> separates <strong>downloading video files</strong> from <strong>running a tracked session</strong>.
-          Downloading or previewing files never claims a session or changes participant progress.
+        <p style="margin-bottom: 0;">
+          <code>schedule()</code> and <code>replace()</code> return a new revision and leave the one you called unchanged.
         </p>
-
-        <div class="split-grid">
-          <div class="panel">
-            <h3>A. Download videos ahead of time (untracked)</h3>
-            <p>
-              Run <code>session.download()</code> in a setup script or notebook before the participant arrives.
-              It downloads and verifies every MP4 for the session into <code>~/.cache/dbstim</code>:
-            </p>
-            <div class="code-wrap">
-              <pre><code class="language-python" data-snippet="journey-download">experiment = client.experiment("Memory demo")
-session = experiment.subjects[0].sessions[0]
-
-cache_folder = session.download()
-
-run = session.next_run()
-if run is not None:
-    first_mp4 = run.media(run.trials[0], mode="local")</code></pre>
-            </div>
-            <ul style="font-size: 0.9rem; margin-bottom: 0;">
-              <li><strong>Shared cache:</strong> Files live under <code>$XDG_CACHE_HOME/dbstim</code> or <code>~/.cache/dbstim</code>, so task scripts in any folder reuse what you already downloaded.</li>
-              <li><strong>Custom folder:</strong> <code>session.download("/path/to/dir")</code> or <code>subject.session("session-001", directory="/path/to/dir")</code> uses that directory as given—give each session its own folder on a filesystem that supports hard links (not exFAT or FAT).</li>
-            </ul>
-          </div>
-
-          <div class="panel">
-            <h3>B. Run a tracked session</h3>
-            <p>
-              Wrap presentation in <code>with session:</code> and step through <code>session.next_run()</code> and
-              <code>run.next_trial()</code>. Your <code>present(path)</code> function plays the video and returns a
-              plain-JSON result dictionary (or <code>None</code>):
-            </p>
-            <div class="code-wrap">
-              <pre><code class="language-python" data-snippet="journey-present">session = experiment.subjects[0].sessions[0]
-
-with session:  # claims the session and finishes it on exit
-    while (run := session.next_run()) is not None:
-        while (trial := run.next_trial()) is not None:
-            path = run.media(trial)
-            run.record(trial, "started")
-            result = present(path)  # your PGL or PsychoPy function
-            run.record(trial, "completed", result=result)</code></pre>
-            </div>
-            <ul style="font-size: 0.9rem; margin-bottom: 0;">
-              <li><strong>Session outcome:</strong> Leaving <code>with session:</code> finishes the session as <code>"completed"</code> when every trial is completed, <code>"interrupted"</code> if you stop early (including Ctrl-C) or abandon a trial, or <code>"failed"</code> if an exception escapes the block.</li>
-              <li><strong>Your code reports playback:</strong> <code>dbstim</code> only records what <code>present(path)</code> returns; it cannot see the screen. In PGL, <code>play()</code> returning does not by itself prove the video was shown.</li>
-              <li><strong>Trial fields:</strong> Each <code>Trial</code> has <code>trial_id</code>, <code>stimulus_id</code>, <code>position</code> (1-based), <code>role</code> (<code>"parent"</code>, <code>"repeat"</code>, or <code>"foil"</code>), <code>media_type="video"</code>, and <code>segment</code> (<code>Segment(start_seconds, end_seconds)</code> or <code>None</code>). Split halves and foils are already trimmed to play from time zero.</li>
-            </ul>
-          </div>
-        </div>
-
-        <h3>Media modes (<code>run.media(trial, mode=...)</code>)</h3>
-        <ul>
-          <li><code>mode="cache"</code> <em>(default)</em>: Returns the verified local <code>Path</code> if cached, or downloads it on the spot. Calling <code>run.media(trial)</code> without pre-downloading fetches missing video inside your trial loop.</li>
-          <li><code>mode="local"</code>: Uses only an already-downloaded file and raises <code>ApiError</code> immediately if it is missing. Call <code>session.download()</code> before <code>with session:</code> and pass <code>mode="local"</code> inside the loop so presentation never waits on a download.</li>
-          <li><code>mode="remote"</code>: Requests a 5-minute streaming URL from the server without saving to disk; your player streams over the network during playback.</li>
-        </ul>
       </section>
 
-      <section class="card" id="timing">
-        <h2>6. Network vs. local calls</h2>
+      <section class="card" id="download">
+        <h2>4. Journey A: download videos for your own code</h2>
         <p>
-          Every network call in <code>dbstim</code> is synchronous. Keep server requests between trials—or before the
-          session—so they never block frame rendering. See <a href="server-to-local-flow.md">Server-to-Local Flow</a>
-          for the full request sequence.
+          <code>download(folder)</code> writes a portable BIDS 1.11.2 folder that works without dbstim. Each video is
+          checked against its size and SHA-256 before it takes its final name; running it again reuses verified files.
+          A folder that holds another revision is refused.
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="journey-download">folder = experiment.download("clips_bids")</code></pre>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Path</th><th>Contents</th></tr></thead>
+            <tbody>
+              <tr><td><code>dataset_description.json</code>, <code>README</code></td><td>BIDS dataset name and generator; what the folder holds</td></tr>
+              <tr><td><code>stimuli/*.mp4</code></td><td>the videos; foil halves are separate files</td></tr>
+              <tr><td><code>stimuli/manifest.json</code></td><td>experiment id, revision, filters, seed, and every file's size, SHA-256 and duration</td></tr>
+              <tr><td><code>stimuli/manifest.csv</code></td><td><code>filename</code>, <code>index</code>, <code>id</code>, <code>sha256</code>, <code>bytes</code>, <code>duration</code>: one row per movie, the single CSV PGL's movie database expects</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-bottom: 0;">No subjects, scheduling or tracking are involved.</p>
+      </section>
+
+      <section class="card" id="tracked">
+        <h2>5. Journey B: a tracked run</h2>
+        <p>
+          Online once before, offline for the whole run, online once after. The run is the protected window: nothing in
+          it contacts the website, so the network can never stall the display.
+        </p>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem;">
+          <div class="panel">
+            <h3>Online, before: schedule and check out</h3>
+            <p>
+              <code>schedule()</code> adds subjects, sessions and runs as a new revision. <code>checkout()</code> reserves
+              one subject session for this computer and downloads only its videos and run plans.
+            </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="journey-checkout">scheduled = client.open("Clips").schedule(
+    subjects=5, sessions=1, runs=2, trials_per_run=8,
+    foils_per_run=0, repeats_per_run=0, shared_fraction=0,
+)
+scheduled.checkout(subject=1, session=1, folder="sub01_ses01")</code></pre>
+        </div>
+            <p style="margin-bottom: 0;">
+              Another computer's checkout fails with HTTP <code>409</code> until it passes <code>takeover=True</code>. Use a
+              new folder for each subject session.
+            </p>
+          </div>
+          <div class="panel">
+            <h3>Offline: record the run</h3>
+            <p>
+              <code>dbstim.session(folder)</code> reopens the checkout without the network. Iterating a run yields the
+              trials with no outcome yet, in order. Every call is written to disk before it returns.
+            </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="journey-run">session = dbstim.session("sub01_ses01")
+with session.run(1) as run:
+    for trial in run:  # Trial(number, file, video_id, role)
+        run.started(trial, onset=now() - t0)
+        shown = play(trial.file)  # your presentation code
+        if shown.full:
+            run.completed(trial, duration=shown.seconds,
+                          result={"key": shown.key})
+        else:
+            run.abandoned(trial, duration=shown.seconds)</code></pre>
+        </div>
+          </div>
+        </div>
+        <h3>Online, afterwards: sync</h3>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="journey-sync">session.sync()  # {1: 'accepted', 2: 'waiting'}</code></pre>
+        </div>
+        <p>
+          <code>onset</code> is seconds from the time zero your code chose, such as the scanner trigger.
+          <code>completed</code> and <code>abandoned</code> are your code's claims; dbstim records them and never checks
+          the display. <code>trial.role</code> is <code>"video"</code>, <code>"repeat"</code> or <code>"foil"</code>; foil
+          halves are already cut, so play them from time zero.
+        </p>
+        <div class="callout info" style="margin-bottom: 0;">
+          <strong>With PGL</strong>
+          PGL owns the loop, so the calls go in your <code>pglTask</code> hooks around <code>e.run()</code>: start the trial
+          when its movie segment starts, then record <code>completed</code> or <code>abandoned</code> after
+          <code>movie.play()</code> returns, and abandon an open trial when Escape ends the task. The documented example is
+          <a href="https://github.com/StanfordDigitalBrainProject/dbstim/blob/main/examples/pgl_tracked_movie_task.py"><code>examples/pgl_tracked_movie_task.py</code></a>;
+          it is user code, and dbstim does not import PGL.
+        </div>
+      </section>
+
+      <section class="card" id="events">
+        <h2>6. Events and frame timing</h2>
+        <p>
+          Leaving the <code>with</code> block writes
+          <code>sub-01/ses-01/beh/sub-01_ses-01_task-dbstim_run-01_events.tsv</code> and a JSON sidecar describing each
+          column. The journal in <code>stimuli/.dbstim/</code> is the record; the events file is rebuilt from it.
         </p>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr>
-                <th>Operation</th>
-                <th>I/O Type</th>
-                <th>Behavior &amp; Timing</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Column</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td><code>onset</code></td><td>seconds from your run's time zero, as reported</td></tr>
+              <tr><td><code>duration</code></td><td>seconds shown, as reported; <code>n/a</code> if unknown</td></tr>
+              <tr><td><code>trial_type</code></td><td><code>video</code>, <code>repeat</code> or <code>foil</code></td></tr>
+              <tr><td><code>stim_file</code></td><td>movie name in <code>stimuli/</code></td></tr>
+              <tr><td><code>video_id</code></td><td>catalog video id</td></tr>
+              <tr><td><code>planned_duration</code></td><td>the movie's length from the manifest</td></tr>
+              <tr><td><code>outcome</code></td><td><code>completed</code> or <code>abandoned</code></td></tr>
+              <tr><td><code>part</code></td><td>recording part, from 1; resuming a run starts a new part</td></tr>
+              <tr><td><code>result</code></td><td>your result as compact JSON, or <code>n/a</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          <code>dbstim.frame_summary(presented_times, movie_times, duration)</code> turns PGL's per-frame arrays into
+          evidence for the result. Zero or non-finite presentation times count as dropped frames:
+        </p>
+        <div class="code-wrap">
+          <pre><code class="language-python" data-snippet="frame-summary">summary = dbstim.frame_summary(movie.presentedTimes, movie.movieTimes, movie.duration)
+# {'frames_shown': 135, 'frames_dropped': 0, 'seconds_shown': 4.5, 'reached_end': True}
+run.completed(trial, duration=summary["seconds_shown"], result=summary)</code></pre>
+        </div>
+        <p style="margin-bottom: 0;">
+          A result is <code>None</code> or a plain JSON <code>dict</code>. Timing arguments accept NumPy numbers; inside a
+          result, convert them with <code>int()</code> or <code>float()</code>. Behavioral responses and PGL's own data
+          files stay with your task.
+        </p>
+      </section>
+
+      <section class="card" id="timing">
+        <h2>7. Network vs. local calls</h2>
+        <p>
+          Every network call is synchronous. Journey B keeps them all outside the run.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Operation</th><th>I/O Type</th><th>Behavior &amp; Timing</th></tr></thead>
             <tbody>
               <tr>
-                <td><code>connect()</code>, <code>Client(...)</code>, <code>client.metrics()</code>, <code>client.experiments()</code>, <code>client.experiment(...)</code>, <code>client.create_experiment(...)</code>, <code>experiment.publish()</code>, <code>experiment.summary()</code></td>
+                <td><code>connect()</code>, <code>client.metrics()</code>, <code>client.create(...)</code>, <code>client.open(...)</code>, <code>experiment.schedule(...)</code>, <code>experiment.replace(...)</code></td>
                 <td><span class="pill http">HTTP</span></td>
-                <td>Synchronous HTTPS requests. Run during setup or startup.</td>
+                <td>Synchronous HTTPS requests during setup.</td>
               </tr>
               <tr>
-                <td><code>experiment.subjects</code></td>
-                <td><span class="pill http">HTTP (1st)</span> <span class="pill local">Local (cached)</span></td>
-                <td>First access fetches all subject manifests; later accesses on the same <code>Experiment</code> reuse memory (<code>experiment.subject(id)</code> always fetches over HTTP).</td>
-              </tr>
-              <tr>
-                <td><code>subject.sessions</code>, <code>subject.session(id)</code>, <code>subject.session_ids</code>, <code>session.run_ids</code>, <code>session.run("run-001")</code>, <code>run.trials</code>, <code>trial.*</code>, <code>repr(...)</code></td>
-                <td><span class="pill local">Local (Memory)</span></td>
-                <td>Reads manifest data already in memory; no disk or network I/O.</td>
-              </tr>
-              <tr>
-                <td><code>session.download()</code></td>
+                <td><code>experiment.download(folder)</code>, <code>experiment.checkout(...)</code></td>
                 <td><span class="pill http">HTTP + Disk</span></td>
-                <td>Downloads missing MP4s and verifies SHA-256 checksums for the session. Run before <code>with session:</code>.</td>
+                <td>Download missing MP4s and verify each one. While the server prepares a video it answers 503 with Retry-After; dbstim waits, for up to five minutes.</td>
               </tr>
               <tr>
-                <td><code>run.media(trial, mode="local")</code><br><em>(or <code>mode="cache"</code> when cached)</em></td>
-                <td><span class="pill local">Local (Disk SHA-256)</span></td>
-                <td>No network I/O, but hashes the full MP4 file with SHA-256 on every call to verify its receipt. Resolve the path before drawing your first frame.</td>
+                <td><code>dbstim.session(folder)</code>, <code>session.run(n)</code>, <code>for trial in run</code></td>
+                <td><span class="pill local">Local</span></td>
+                <td>Read the checkout's files; no network.</td>
               </tr>
               <tr>
-                <td><code>run.media(trial, mode="remote")</code></td>
+                <td><code>with run:</code>, <code>run.started</code>, <code>run.completed</code>, <code>run.abandoned</code></td>
+                <td><span class="pill local">Local (Disk fsync)</span></td>
+                <td>Append one journal line and force it to disk before returning. Leaving the block rewrites the events file.</td>
+              </tr>
+              <tr>
+                <td><code>session.sync()</code></td>
                 <td><span class="pill http">HTTP</span></td>
-                <td>Requests a 5-minute streaming URL (<code>POST</code>); the player then streams over the network during playback.</td>
-              </tr>
-              <tr>
-                <td><code>session.next_run()</code>, <code>session.run("latest")</code>, <code>run.next_trial()</code>, <code>session.unconfirmed</code>, <code>session.abandoned</code>, <code>session.results</code>, <code>run.results</code></td>
-                <td><span class="pill http">HTTP GET (No retry)</span></td>
-                <td>Fetches session state from the server on <strong>every call or property access</strong>. Reads are <strong>not retried</strong>: a dropped read raises <code>ApiError</code>, and leaving <code>with session:</code> on that error marks the session <code>"failed"</code>.</td>
-              </tr>
-              <tr>
-                <td><code>session.start()</code>, <code>session.finish()</code>, <code>run.record(...)</code>, <code>session.record(...)</code></td>
-                <td><span class="pill http">HTTP POST (Retried)</span></td>
-                <td>Sends an idempotent write. On connection errors or HTTP <code>500/502/503/504</code>, retries up to 3 times (<code>0.5s</code>, <code>1.0s</code>, <code>2.0s</code> pauses) with the same request ID so events are never duplicated.</td>
+                <td>For each closed run without a receipt: check for a stored copy, then upload it. Run it after the session.</td>
               </tr>
             </tbody>
           </table>
@@ -792,109 +795,92 @@ with session:  # claims the session and finishes it on exit
       </section>
 
       <section class="card" id="recovery">
-        <h2>7. Results and recovery</h2>
+        <h2>8. Recovery and sync</h2>
         <p>
-          See <a href="recovery.md">Recovering a Session</a> for the complete recovery reference.
+          See <a href="recovery.md">Recovering a Run</a> for the complete reference.
         </p>
-
-        <h3>Result payloads</h3>
+        <h3>A crash, power cut or Ctrl-C</h3>
         <p>
-          <code>run.record(trial, status, result=...)</code> checks <code>result</code> before sending: it must be
-          <code>None</code> or a plain JSON <code>dict</code> (<code>str</code>, <code>int</code>, finite <code>float</code>,
-          <code>bool</code>, <code>None</code>, <code>list</code>, <code>dict</code>). Convert NumPy scalars with
-          <code>int(x)</code> or <code>float(x)</code>, and pass <code>None</code> when there is no response:
+          Open the same run again on the same computer and keep looping. A trial started with no ending is recorded
+          <code>abandoned</code> (duration <code>n/a</code>) and <strong>never shown again</strong>; the loop continues
+          with the next trial, in a new <code>part</code>. A half-written last journal line is dropped.
         </p>
         <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="results-validation">run.record(trial, "completed", result={"rt_ms": int(412), "choice": "left", "confidence": None})
-
-all_results = session.results
-current_run_results = run.results</code></pre>
+          <pre><code class="language-python" data-snippet="recovery-resume">session = dbstim.session("sub01_ses01")
+with session.run(1) as run:
+    for trial in run:  # continues after the last trial with an outcome
+        ...</code></pre>
         </div>
         <p>
-          <code>session.results</code> and <code>run.results</code> list only trials recorded with a non-<code>None</code>
-          result dict; <code>session.abandoned</code> lists every abandoned trial even when <code>result=None</code>.
+          Only one program may have a session open: a second recorder, or a sync during a run, raises
+          <code>RuntimeError</code>. The lock is released when the program exits, even by crashing.
         </p>
-
-        <h3>Interrupted (unconfirmed) trials</h3>
+        <h3>Ending a run early</h3>
         <p>
-          Every started trial ends once as <code>"completed"</code> (shown to the end) or <code>"abandoned"</code> (cut short);
-          <strong>neither is ever replayed</strong>. If a process stops after <code>record(trial, "started")</code>, that trial
-          stays in <code>session.unconfirmed</code> and blocks <code>run.next_trial()</code> across the session until you resolve it:
+          A run syncs only once every trial has an outcome. Until then <code>sync()</code> reports it as
+          <code>"waiting"</code> and you can continue it later. To close a run you will not finish, start and abandon each
+          remaining trial.
         </p>
+        <h3>Moving to another computer</h3>
         <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="recovery-unconfirmed">session = experiment.subjects[0].sessions[0]
-
-with session:
-    # Record "completed" only if the participant saw the full video
-    for trial in session.unconfirmed:
-        session.record(trial, "abandoned", result={"reason": "stopped mid-trial"})
-
-    while (run := session.next_run()) is not None:
-        while (trial := run.next_trial()) is not None:
-            path = run.media(trial)
-            run.record(trial, "started")
-            result = present(path)
-            run.record(trial, "completed", result=result)
-
-print(session.abandoned, session.results)</code></pre>
+          <pre><code class="language-python" data-snippet="recovery-takeover"># On the new computer, only after the old one has stopped presenting:
+experiment.checkout(subject=1, session=1, folder="sub01_ses01", takeover=True)</code></pre>
         </div>
-        <div class="callout warn">
-          <strong>Abandoned trials mark the session <code>"interrupted"</code></strong>
-          Even after all remaining trials complete, a session with an abandoned trial finishes as <code>"interrupted"</code>;
-          calling <code>session.finish("completed")</code> fails with HTTP <code>409</code>.
+        <p>
+          An unfinished run belongs to the computer that started it and cannot move. Runs the first computer syncs after
+          a takeover are <code>"kept as flagged attempt"</code>: the server stores them separately, and their events move
+          to <code>sourcedata/attempt-&lt;id&gt;/</code>.
+        </p>
+        <h3>Sync outcomes</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Outcome</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>"accepted"</code></td><td>stored on the server by this call</td></tr>
+              <tr><td><code>"already synced"</code></td><td>stored earlier, including when the reply was lost</td></tr>
+              <tr><td><code>"kept as flagged attempt"</code></td><td>stored as a flagged attempt after a takeover</td></tr>
+              <tr><td><code>"waiting"</code></td><td>not closed yet; nothing sent</td></tr>
+            </tbody>
+          </table>
         </div>
-
-        <h3>Failed writes and session takeover</h3>
-        <p>
-          If a write (<code>start()</code>, <code>finish()</code>, or <code>record()</code>) still fails after its 3 automatic
-          retries, <code>dbstim</code> keeps that command pending on the <code>Session</code> object and blocks
-          <code>next_run()</code>, <code>next_trial()</code>, and <code>finish()</code> until you repeat the same call on that
-          instance (<code>4xx</code> errors are not retried).
-        </p>
-        <p>
-          If the script exited before leaving <code>with session:</code>, a new <code>session.start()</code> raises
-          <code>ApiError</code> (<code>HTTP 409: Another presenter owns this session</code>). After confirming the old process
-          has stopped, claim the session with <code>takeover=True</code>:
-        </p>
         <div class="code-wrap">
-          <pre><code class="language-python" data-snippet="recovery-takeover"># Only after confirming the previous process has stopped:
-session.start(takeover=True)
-with session:
-    for trial in session.unconfirmed:
-        session.record(trial, "abandoned", result={"reason": "previous process crashed"})
-    while (run := session.next_run()) is not None:
-        while (trial := run.next_trial()) is not None:
-            path = run.media(trial)
-            run.record(trial, "started")
-            result = present(path)
-            run.record(trial, "completed", result=result)</code></pre>
+          <pre><code class="language-python" data-snippet="recovery-sync">try:
+    outcomes = session.sync(client=client)  # or let it prompt for the password
+except dbstim.SyncError as error:
+    print(error.refused)   # {1: ApiError(...)}: refused runs
+    print(error.outcomes)  # every other run's outcome</code></pre>
+        </div>
+        <div class="callout warn" style="margin-bottom: 0;">
+          <strong>A refused run does not block the others</strong>
+          <code>sync()</code> tries every closed run, then raises <code>SyncError</code> if the server refused any, for
+          example a run another computer already synced. After a dropped connection (<code>ApiError</code>), run
+          <code>sync()</code> again: the same record is resent and stored once.
         </div>
       </section>
 
       <section class="card" id="limitations">
-        <h2>8. Limitations and upgrading</h2>
+        <h2>9. Upgrading and limits</h2>
         <ul>
           <li>
-            <strong>Live server required for progress:</strong>
-            Videos cache on disk, but creating experiments, claiming sessions, reading progress, and recording trials
-            require HTTPS access to the server. Offline event queuing and standalone export bundles are not supported.
+            <strong>Upgrading from 0.5:</strong>
+            1.0 removes <code>Subject</code>, the online session API (<code>with session:</code>, <code>next_run()</code>,
+            <code>next_trial()</code>, <code>record()</code>, <code>media()</code>) and the <code>~/.cache/dbstim</code>
+            cache. 1.0 cannot continue a 0.5 session; finish it with <code>v0.5.0</code>, which stays installable.
           </li>
           <li>
-            <strong>Server support for <code>"abandoned"</code>:</strong>
-            Recording <code>"abandoned"</code> requires <code>dbp-dataset-browser</code> <code>492a894</code> or later with its
-            database migration applied. On older servers, <code>record(trial, "abandoned")</code> raises <code>ApiError</code>
-            (<code>HTTP 400</code>) and leaves the trial unconfirmed.
+            <strong>Server version:</strong>
+            1.0 needs a server with selections, experiment media manifests and run sync (dbp-dataset-browser
+            <code>6799d6d</code> or later).
           </li>
           <li>
-            <strong>Upgrading from 0.4 to 0.5:</strong>
-            Version 0.4 cached videos in <code>./.dbstim</code> and could not advance past an abandoned trial. Version 0.5
-            uses <code>~/.cache/dbstim</code> and ignores old <code>.dbstim</code> folders, which you can delete.
+            <strong>Not part of dbstim:</strong>
+            rendering, judging whether a video was seen, uploading videos, and a PGL adapter.
           </li>
           <li>
             <strong>Verification scope:</strong>
-            All examples and behaviors in this guide were verified against <code>dbstim</code> <code>v0.5.0</code> and local
-            HTTP test fixtures, without creating experiments or modifying state on the live <code>dbstimuli.com</code> server.
-            Production behavior depends on the server revision and database migrations currently deployed.
+            The notebook and the test suite were run with <code>dbstim</code> <code>v1.0.0</code> against the real server
+            code on temporary local databases, without changing anything on the live <code>dbstimuli.com</code> server.
+            The PGL example has not yet been run with PGL; it is validated in a hands-on session after 1.0.
           </li>
         </ul>
       </section>
@@ -903,7 +889,7 @@ with session:
 
   <footer>
     <div>
-      <strong>dbstim v0.5.0</strong> · Python 3.11+ API Client ·
+      <strong>dbstim v1.0.0</strong> · Python 3.11+ API Client ·
       <a href="https://github.com/StanfordDigitalBrainProject/dbstim">github.com/StanfordDigitalBrainProject/dbstim</a>
     </div>
     <div>

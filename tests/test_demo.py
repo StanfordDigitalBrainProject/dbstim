@@ -25,13 +25,18 @@ class DemoTests(unittest.TestCase):
                 self.assertEqual(cell['outputs'], [])
                 tree = ast.parse(source)
                 self.assertFalse(any(isinstance(node, (ast.FunctionDef, ast.ClassDef)) for node in ast.walk(tree)))
-                calls = [node.func.attr for node in ast.walk(tree)
-                         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
-                self.assertFalse({'record', 'start', 'finish'} & set(calls), 'Preview cells must not report presentation')
-                self.assertNotIn('with session', source)
+                calls = {node.func.attr for node in ast.walk(tree)
+                         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)}
+                self.assertFalse({'record', 'start', 'finish', 'next_run', 'next_trial', 'publish',
+                                  'create_experiment'} & calls, 'Use the 1.0 API only')
                 code.append(source)
         self.assertLessEqual(len('\n'.join(code).splitlines()), 50)
         self.assertNotIn('password123', path.read_text())
+        joined = '\n'.join(code)
+        for journey in ('client.create(', '.download(', '.schedule(', '.checkout(', 'dbstim.session(',
+                        'run.started(', 'run.completed(', 'frame_summary(', '.sync('):
+            self.assertIn(journey, joined)
+        self.assertLess(joined.index('.download('), joined.index('.checkout('), 'Journey A comes before B')
 
     def test_readme_installs_this_release(self):
         pins = re.findall(r'dbstim\.git@([^"\s]+)', (ROOT / 'README.md').read_text())

@@ -1,100 +1,93 @@
 # dbstim
 
-Create experiments on [dbstimuli.com](https://dbstimuli.com), retrieve assigned
-videos, and report presentation progress from your own task program.
+Choose videos on [dbstimuli.com](https://dbstimuli.com), download them as a
+portable BIDS stimuli folder, and record what your task showed. Recording
+works offline; you sync afterwards.
 
 ## Install
 
 Requires Python 3.11+. No other dependencies.
 
-    pip install "git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"
+    pip install "git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v1.0.0"
 
 or with uv:
 
-    uv add "dbstim @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"
+    uv add "dbstim @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v1.0.0"
 
-Pin a tag or commit for reproducible analyses.
 For the example notebook, add the Jupyter extra:
 
-    pip install "dbstim[jupyter] @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v0.5.0"
+    pip install "dbstim[jupyter] @ git+https://github.com/StanfordDigitalBrainProject/dbstim.git@v1.0.0"
 
-Sign in with your dbstimuli.com account; no Google Cloud or API key is needed.
-dbstim replaces the legacy `dbp_api` package (revision `d11933f`).
+Sign in with your dbstimuli.com account. Upgrading from 0.5? The API changed;
+see the [changelog](CHANGELOG.md).
 
-## Create and publish
+## A. Download videos for your own code
 
 ```python
 import dbstim
-from dbstim import MetricFilter
+from dbstim import Filter
 
 client = dbstim.connect()  # asks for your username and password
-client.metrics()           # what you can filter on
-
-experiment = client.create_experiment(
-    "Memory demo", subjects=5, runs_per_session=2, trials_per_run=24,
-    foils_per_run=4, shared_fraction=0.1, seed=1,
-    filters=[MetricFilter("duration_seconds", ">=", 10),
-             MetricFilter("duration_seconds", "<=", 20)],
-)
-experiment.publish()
+client.metrics()           # metric names you can filter on
+experiment = client.create("Clips", filters=[Filter("duration_seconds", ">=", 10)],
+                           count=40, seed=1)
+experiment.download("clips_bids")
 ```
 
-Reopen it with `client.experiment("Memory demo")`. If several share the name,
-the error lists their ids for `client.experiment(id=...)`.
+Later, `client.open("Clips")` reopens the latest revision. The folder works
+without dbstim:
 
-## Present
+    clips_bids/dataset_description.json, README
+    clips_bids/stimuli/*.mp4
+    clips_bids/stimuli/manifest.json   revision, filters, sizes and SHA-256
+    clips_bids/stimuli/manifest.csv    filename, index, id, ... for PGL
+
+No subjects, scheduling or tracking are needed.
+
+## B. Track a run
+
+Online, before the session:
 
 ```python
-session = experiment.subjects[0].sessions[0]
-
-with session:  # starts the session and finishes it when the block ends
-    while (run := session.next_run()) is not None:
-        while (trial := run.next_trial()) is not None:
-            path = run.media(trial)  # verified local file; downloads if needed
-            run.record(trial, "started")
-            result = present(path)   # your PGL, PsychoPy, or other function
-            run.record(trial, "completed", result=result)
+experiment = client.open("Clips").schedule(subjects=5, runs=2, trials_per_run=8)
+experiment.checkout(subject=1, session=1, folder="sub01_ses01")
 ```
 
-Leaving the block finishes the session as `completed` if every trial was
-completed, `interrupted` if you stopped early (including Ctrl-C) or abandoned a
-trial, or `failed` if an error was raised. Results must be plain JSON (convert
-numpy numbers; use `None` for no response).
+Checkout reserves the session for this computer and downloads its videos.
+Then, offline, with no website traffic during the run:
 
-dbstim verifies videos into your per-user cache (`~/.cache/dbstim`), so a
-notebook's `session.download()` serves later programs in any folder.
-`session.download(directory)` uses another folder; `run.media(trial, mode="remote")`
-returns a five-minute streaming URL. `session.results` lists recorded results.
+```python
+session = dbstim.session("sub01_ses01")
+with session.run(1) as run:
+    for trial in run:                    # trials still to show, in order
+        run.started(trial, onset=0.0)    # seconds from your run's time zero
+        ...                              # your code plays trial.file
+        run.completed(trial, duration=4.5, result={"key": "j"})
+        # or run.abandoned(trial) if it was not shown to the end
+```
 
-The step-by-step notebook is `notebooks/api.ipynb`
-(`uv run --extra jupyter jupyter lab notebooks/api.ipynb` from a clone).
+Every call is written to disk before it returns. Leaving the block writes
+`sub-01/ses-01/beh/sub-01_ses-01_task-dbstim_run-01_events.tsv`. Online
+again, afterwards:
+
+```python
+session.sync()  # {1: 'accepted', 2: 'waiting'}
+```
+
+With PGL, call these from your `pglTask` hooks; see
+[examples/pgl_tracked_movie_task.py](examples/pgl_tracked_movie_task.py).
 
 ## When something goes wrong
 
-- **Stopped mid-trial:** record each trial in `session.unconfirmed` as
-  `"completed"` only if it was shown to the end, otherwise `"abandoned"`.
-  Nothing is replayed.
-- **Dropped connection:** `start`, `record` and `finish` are resent unchanged,
-  never recorded twice.
-- **"Another presenter owns this session":** once that program has stopped,
-  call `session.start(takeover=True)`.
+- **Crash or power cut:** open the run again. A trial started without an
+  ending is recorded `abandoned`; the loop continues with the next trial.
+  Nothing is shown twice.
+- **Another computer:** `checkout(..., takeover=True)` moves the reservation.
+  Runs the first computer syncs afterwards are kept as flagged attempts.
+- **Sync refused:** the other runs still sync; `SyncError` then lists the
+  refused ones.
 
-[Recovering a session](docs/recovery.md) also covers upgrading from 0.4.
-
-## Glossary
-
-- **Subject:** one participant's fixed assignment of videos.
-- **Session / run:** a sitting, and a block of trials within it.
-- **Trial:** one video presentation.
-- **Parent:** a full video, or the first half of a video split for a foil.
-- **Foil:** the second half of a split parent.
-- **Repeat:** a parent shown a second time. Foils and repeats count toward `trials_per_run`.
-- **shared_fraction:** share of parent videos every subject sees, rounded down;
-  see `experiment.summary()["shared_fraction_realized"]`.
-- **sampling:** how YouTube channels are drawn: `"random"`, `"balanced"`, or `"unique"`.
-- **corpus:** where `content` is searched: `"captions"`, `"transcripts"`, or `"both"`.
-- **Unconfirmed:** recorded `started`, with no ending yet.
-- **Abandoned:** not shown to the end; final; listed by `session.abandoned`.
+[Recovery](docs/recovery.md) has the details.
 
 ## Development
 
@@ -102,4 +95,7 @@ The step-by-step notebook is `notebooks/api.ipynb`
 uv run python -m unittest discover -s tests -v
 ```
 
-[Guide](https://stanforddigitalbrainproject.github.io/dbstim/) · [API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md)
+Set `DBSTIM_SERVER` to a dbp-dataset-browser checkout to also run the tests
+against the real server code on temporary local databases.
+
+[Guide](https://stanforddigitalbrainproject.github.io/dbstim/) · [API map](docs/api-interface.md) · [Objects](docs/api-classes.md) · [Data flow](docs/server-to-local-flow.md) · [Notebook](notebooks/api.ipynb)

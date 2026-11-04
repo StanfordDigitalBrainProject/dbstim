@@ -1,75 +1,76 @@
 # API map
 
 [api-interface.html](api-interface.html) is the interactive version: download
-it and open it in any browser, offline. Both describe dbstim 0.5.0.
+it and open it in any browser, offline. Both describe dbstim 1.0.0.
 
 Colors: **blue** sends HTTP to dbstimuli.com, **green** stays in your Python
-process, **amber** uses the media cache, **purple** is your own code.
+process, **amber** writes files on your computer, **purple** is your own code.
 
 ```mermaid
 flowchart TD
     connect["dbstim.connect()"]:::http --> choice{New or existing?}
-    choice -->|new| create["client.create_experiment(...)"]:::http
-    choice -->|existing| reopen["client.experiment(name)<br/>id=... sends nothing"]:::http
-    create -->|draft| publish["experiment.publish()"]:::http
-    reopen -->|draft| publish
-    reopen -->|published| subjects
-    publish --> subjects["experiment.subjects[0]"]:::http
-    subjects --> sessions["subject.sessions[0]"]:::local
-    sessions --> download["session.download()<br/>records no progress"]:::disk
-    sessions --> enter
-    subgraph tracked["Tracked presentation"]
-        enter["with session: start()"]:::http --> nextRun["session.next_run()"]:::http
-        nextRun -->|Run| nextTrial["run.next_trial()"]:::http
-        nextTrial -->|Trial| media["run.media(trial)"]:::disk
-        media --> started["run.record(trial, 'started')"]:::http
-        started --> present["present(path)"]:::yours
-        present --> ended["run.record(trial, 'completed', result=...)<br/>or 'abandoned'"]:::http
-        ended --> nextTrial
-        nextTrial -->|None| nextRun
-        nextRun -->|None| finish["leave block: finish(status)"]:::http
+    choice -->|new| create["client.create(name, filters, count, seed)"]:::http
+    choice -->|existing| reopen["client.open(name, revision=None)"]:::http
+    create --> experiment["Experiment revision"]:::local
+    reopen --> experiment
+    experiment -->|"Journey A"| download["experiment.download(folder)"]:::disk
+    experiment -->|"Journey B"| schedule["experiment.schedule(...)"]:::http
+    schedule --> checkout["experiment.checkout(subject, session, folder)"]:::http
+    checkout --> folder[("BIDS folder")]:::disk
+    download --> folder
+    subgraph offline["Offline: the whole run"]
+        reopenSession["dbstim.session(folder)"]:::local --> run["with session.run(n) as run"]:::disk
+        run --> trial["for trial in run"]:::local
+        trial --> started["run.started(trial, onset)"]:::disk
+        started --> present["play trial.file"]:::yours
+        present --> ended["run.completed(trial, duration, result)<br/>or run.abandoned(trial)"]:::disk
+        ended --> trial
     end
+    folder --> reopenSession
+    run -->|"leave the block"| events["events.tsv + .json"]:::disk
+    events --> sync["session.sync()"]:::http
     classDef http fill:#e6eefb,stroke:#1f5fbf,color:#1d232b
     classDef local fill:#e7f1e9,stroke:#3f6b4a,color:#1d232b
     classDef disk fill:#f8eedb,stroke:#94600f,color:#1d232b
     classDef yours fill:#f1e8f8,stroke:#74419c,color:#1d232b
 ```
 
-Downloading fills the per-user cache (`~/.cache/dbstim`); `run.media(trial)`
-then returns a verified file without a request, or downloads that one video if
-it is missing. `mode="remote"` returns a short-lived URL instead.
+Journey A stops at the folder: videos, `manifest.json` and a PGL-loadable
+`manifest.csv` under `stimuli/`. Journey B checks out one subject session to
+this computer, records runs with no network, and syncs afterwards.
 
 ## Trial outcomes
 
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> Started: record "started"
-    Started --> Completed: record "completed"
-    Started --> Abandoned: record "abandoned"
+    [*] --> Started: run.started
+    Started --> Completed: run.completed
+    Started --> Abandoned: run.abandoned
+    Started --> Abandoned: crash, then reopen
     Completed --> [*]
     Abandoned --> [*]
     note right of Started
-        Unconfirmed until it has an ending.
-        session.unconfirmed lists it and
-        run.next_trial() raises in every run.
+        Written to the journal before
+        the call returns. Leaving the
+        with block abandons it.
     end note
 ```
 
-Neither ending is presented again. Leaving `with session:` finishes the session
-as `completed` when every trial is completed, `interrupted` after Ctrl-C or when
-any trial is abandoned or unfinished, and `failed` after an exception.
+Neither ending is shown again. A run closes, and can sync, once every trial has
+an outcome. `sync()` reports each run as `accepted`, `already synced`,
+`kept as flagged attempt` or `waiting`, and raises `SyncError` at the end if the
+server refused any.
 
 ## Recovery
 
-- **Stopped mid-trial:** record each of `session.unconfirmed` as `"completed"`
-  only if it was shown to the end, otherwise `"abandoned"`.
-- **Dropped connection:** `start`, `record` and `finish` are resent unchanged on
-  connection failures and HTTP 500, 502, 503 or 504, never on 4xx. If every
-  attempt fails, repeat that call on the same session object before any other.
-- **Another presenter:** once it has stopped, `session.start(takeover=True)`.
+- **Crash or power cut:** reopen the run on the same computer. The open trial
+  becomes `abandoned` and the loop continues.
+- **Dropped connection during sync:** run `sync()` again; the same record is
+  stored once.
+- **Another computer:** `checkout(..., takeover=True)`. The first computer's
+  later syncs become flagged attempts.
 
-dbstim does not render video, judge whether a trial was seen, write a
-standalone manifest, or record progress offline.
+dbstim does not render video, judge whether a trial was seen, or import PGL.
 
 [API objects](api-classes.md) · [Data flow](server-to-local-flow.md) · [Recovery](recovery.md)
