@@ -1,95 +1,96 @@
-# From experiment to presentation
+# From experiment to events file
 
-## 1. Assignments and media
+## 1. What the website keeps
 
-Creating an experiment saves a filtered sample and design. Publishing freezes
-each subject's runs, trial order, and source intervals. Loading a subject
-verifies its manifest hash; downloading and previewing record no progress.
+An experiment is a frozen selection of videos: filters, count and seed.
+`schedule()` and `replace()` save new revisions; earlier revisions stay
+reachable with `open(name, revision=n)` or `open(id=...)`. The website also
+keeps which computer holds each subject session and every synced run.
 
 ```mermaid
-flowchart TB
-    subgraph Server["dbstimuli.com"]
-        Catalog[(Catalog and metrics)] --> Draft["Draft experiment: filters, seed, design"]
-        Draft -->|"publish()"| Manifest["Fixed subject / session / run assignments"]
-        Manifest --> API["Authenticated API"]
-        API <-->|"read / write"| Progress[(Presentation progress and results)]
+flowchart LR
+    subgraph Website["dbstimuli.com"]
+        Selection["Revision: filters, count, seed"] -->|"schedule()"| Plan["Subjects, sessions, runs"]
+        Media[(Pinned videos and foil halves)]
+        Holder["Session holder"]
+        Runs[(Synced runs and flagged attempts)]
     end
-    GCP[(Private GCP media)] -->|"pinned full videos or rendered halves"| API
-    subgraph Computer["Researcher's computer"]
-        SDK["Client → Experiment → Subject → Session → Run"]
-        Local["Verified MP4 cache + receipts"]
-        Remote["Temporary playback URL"]
-        Task["Your task: PGL / PsychoPy / another player"]
-        SDK -->|"download() or media()"| Local
-        SDK -->|"media(mode=remote)"| Remote
-        Local --> Task
-        Remote -->|"stream from website"| Task
-        Task -->|"start / record / finish"| SDK
+    subgraph Computer["Your computers"]
+        Folder["BIDS folder: stimuli/"]
+        Journal["stimuli/.dbstim journal"]
+        Events["sub-*/ses-*/beh/*_events.tsv"]
     end
-    API -->|"assignments, media, progress"| SDK
-    SDK -->|"authenticated requests"| API
+    Selection -->|"download()"| Folder
+    Plan -->|"checkout()"| Folder
+    Media --> Folder
+    Folder -->|"checkout() claims"| Holder
+    Journal --> Events
+    Journal -->|"sync()"| Runs
 ```
 
-`session.download()` fetches the session's videos into the per-user cache
-(`~/.cache/dbstim`) that every program shares; `run.media(trial)` fetches one
-video if not already verified there. Files are checked against size, SHA-256, and
-assignment identity. `mode="local"` uses only verified files; `mode="remote"`
-returns a five-minute streaming URL. You sign in to the website, not Google Cloud.
+## 2. The folder
 
-## 2. Record and resume
+`download(folder)` and `checkout(...)` write the same layout. Each video is
+checked against its size and SHA-256 before it takes its final name, and
+verified files already present are reused. A folder that holds another
+revision is refused.
 
-Your task reports each presentation itself; the server cannot infer from a
-download that anyone watched a clip.
+| Path | Contents |
+| --- | --- |
+| `dataset_description.json` | BIDS 1.11.2 name and generator |
+| `README` | what the folder holds |
+| `stimuli/*.mp4` | the videos; foil halves are separate files |
+| `stimuli/manifest.json` | experiment id, revision, filters, seed, and each file's id, size, SHA-256 and duration |
+| `stimuli/manifest.csv` | `filename, index, id, sha256, bytes, duration`, one row per movie, for PGL's movie database |
+| `stimuli/.dbstim/` | checkout only: run plans, journals, sync receipts |
+
+A checkout holds only that subject session's videos.
+
+## 3. A tracked run
 
 ```mermaid
 sequenceDiagram
-    actor Task as Your task program
-    participant SDK as dbstim
-    participant API as Website API + database
-    Task->>SDK: enter with session, which calls start()
-    SDK->>API: Claim this session
-    API-->>SDK: Acknowledge
-    loop Each trial in the selected run
-        Task->>SDK: run.next_trial()
-        SDK->>API: Read current progress
-        API-->>SDK: Completed and unconfirmed trials
-        SDK-->>Task: Next Trial, None if done, or error if unconfirmed
-        Note over Task,SDK: Continue only when a Trial is returned
-        Task->>SDK: run.media(trial)
-        SDK-->>Task: Verified local path
-        Task->>SDK: run.record(trial, "started")
-        SDK->>API: Store started event
-        API-->>SDK: Acknowledge
-        Note over Task: Present with PGL / PsychoPy
-        Task->>SDK: run.record(trial, "completed", result=...)
-        SDK->>API: Store completed (or abandoned) event and result
-        API-->>SDK: Acknowledge
+    actor Task as Your task
+    participant Run as dbstim Run
+    participant Disk as Journal on disk
+    Task->>Run: with session.run(1)
+    Run->>Disk: open or resume
+    loop each remaining trial
+        Task->>Run: started(trial, onset)
+        Run->>Disk: append and fsync
+        Note over Task: play trial.file
+        Task->>Run: completed(trial, duration, result) or abandoned(trial)
+        Run->>Disk: append and fsync
     end
-    alt Every session trial completed
-        Note over Task: session.next_run() moves to later runs
-        Task->>SDK: leave the with block, finish("completed")
-        SDK->>API: Validate completion and release claim
-        API-->>SDK: Acknowledge
-    else Stopped early or abandoned
-        Task->>SDK: leave the with block, finish("interrupted")
-        SDK->>API: Release claim, retain trial state
-        API-->>SDK: Acknowledge
-    end
-    Note over Task,API: Reopen the same experiment, subject and session on another device
-    Task->>SDK: session.next_run() then run.next_trial()
-    SDK->>API: Read saved run and trial progress
-    API-->>SDK: Server-authoritative state
-    SDK-->>Task: Next Trial, None, or unresolved-trial error
+    Task->>Run: leave the block
+    Run->>Disk: close if every trial has an outcome
+    Run->>Disk: rewrite events.tsv and .json
 ```
 
-Completed and abandoned trials are final. An unconfirmed start anywhere in the
-session blocks every run until it is recorded completed or abandoned
-([recovery](recovery.md)). Dropped commands are resent with the same request ID.
-Replacing an active presenter takes an explicit `start(takeover=True)`. An error
-inside `with session:` finishes it as `failed`.
+No call in the run uses the network. `sync()` later sends each closed run
+once.
 
-`session.next_run()` is the next unfinished run; `session.run("latest")` is the
-most recently started one. `session.results` reads reported results from the
-server. Deleting local downloads never resets server progress.
+## 4. Events columns
 
-[API objects](api-classes.md) · [Metric storage and filters](metrics-and-filters.md)
+Each run gets `sub-01/ses-01/beh/sub-01_ses-01_task-dbstim_run-01_events.tsv`
+and a JSON sidecar describing every column:
+
+| Column | Value |
+| --- | --- |
+| `onset` | seconds from the time zero your code used, as reported |
+| `duration` | seconds shown, as reported; `n/a` if unknown |
+| `trial_type` | `video`, `repeat` or `foil` |
+| `stim_file` | movie name in `stimuli/` |
+| `video_id` | catalog video id |
+| `planned_duration` | the movie's length from the manifest |
+| `outcome` | `completed` or `abandoned` |
+| `part` | recording part, from 1; resuming starts a new part |
+| `result` | your result as compact JSON, or `n/a` |
+
+dbstim does not check that a video was displayed: `completed` is your code's
+claim. `dbstim.frame_summary(presented_times, movie_times, duration)` turns
+PGL's per-frame times into `frames_shown`, `frames_dropped`, `seconds_shown`
+and `reached_end`, ready to pass as a result. Behavioral responses and PGL's
+own data files stay with your task.
+
+[API objects](api-classes.md) · [Recovery](recovery.md) · [Metrics and filters](metrics-and-filters.md)

@@ -25,10 +25,9 @@ class DemoTests(unittest.TestCase):
                 self.assertEqual(cell['outputs'], [])
                 tree = ast.parse(source)
                 self.assertFalse(any(isinstance(node, (ast.FunctionDef, ast.ClassDef)) for node in ast.walk(tree)))
-                calls = [node.func.attr for node in ast.walk(tree)
-                         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
-                self.assertFalse({'record', 'start', 'finish'} & set(calls), 'Preview cells must not report presentation')
-                self.assertNotIn('with session', source)
+                calls = {node.func.attr for node in ast.walk(tree)
+                         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)}
+                self.assertFalse({'record', 'start', 'finish'} & calls, 'Use the 1.0 API only')
                 code.append(source)
         self.assertLessEqual(len('\n'.join(code).splitlines()), 50)
         self.assertNotIn('password123', path.read_text())

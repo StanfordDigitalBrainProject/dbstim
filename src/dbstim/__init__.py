@@ -6,6 +6,6 @@ from .workflow import Experiment
 from ._session import Session, Run, SyncError, Trial, session
 from ._frames import frame_summary
 
-__version__ = '0.5.0'
+__version__ = '1.0.0'
 __all__ = ['ApiError', 'Client', 'connect', 'Experiment', 'Session', 'Run', 'SyncError', 'Trial', 'Metric',
            'MetricFilter', 'Segment', 'Filter', 'session', 'frame_summary']

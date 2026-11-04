@@ -17,14 +17,14 @@ flowchart TB
     Cloud --> API["Website metric queries"]
     Catalog["GCP VM: catalog SQLite<br/>clip identities, source metadata, searchable text"] --> API
     API --> Browser["Browser / dbstim client"]
-    Browser -->|"via API: save experiment or report trials"| Accounts["GCP VM: accounts.sqlite3<br/>assignments, revisions and progress"]
+    Browser -->|"via API: save experiments or sync runs"| Accounts["GCP VM: accounts.sqlite3<br/>revisions, session holders and synced runs"]
     Inventory["Separate media.sqlite3<br/>playback and preview object references"] --> Playback["Video delivery"]
     Objects["GCP object storage<br/>actual MP4s and previews"] --> Playback
 ```
 
 These are **separate databases**, not copies of one CCN2 database; cluster
 bookkeeping and raw results never serve the website. New values go live only
-when a new index is published, not by automatic sync; published assignments stay
+when a new index is published, not by automatic sync; saved experiment revisions stay
 fixed.
 
 On the VM the index is `/srv/dbp/metrics/metrics.sqlite3`; the local preview
@@ -64,8 +64,8 @@ bins and catalog/version identity. Missing rows or null values mean **unknown**.
 
 ```python
 filters = [
-    MetricFilter("duration_seconds", ">=", 10),
-    MetricFilter("source_view_count", ">=", 100_000),
+    Filter("duration_seconds", ">=", 10),
+    Filter("source_view_count", ">=", 100_000),
 ]
 ```
 
@@ -76,13 +76,13 @@ filters = [
 3. A batched server-side aggregation recomputes metric distributions over the
    matching **videos**, with the same bins as the full baseline. The browser
    receives aggregates and one page of results, not the whole database.
-4. Creating an experiment samples from the eligible matching pool with the
-   chosen seed, design and channel rules. A filter match alone does not
+4. `client.create()` samples `count` eligible matching videos with the seed;
+   `schedule()` assigns them to subjects. A filter match alone does not
    guarantee playable media or assignment eligibility.
 
 Filtering runs no FFmpeg/OCR/VLM computation. `source_view_count` belongs to
 the original source video, and its clips inherit it. `client.metrics()` lists
-metric definitions, not per-video measurements. Operators `>= <= > <` mean
+metric names, not per-video measurements. Operators `>= <= > <` mean
 `gte lte gt lt`; `==` means `eq` for whole numbers. With `True`/`False`,
 `==`/`!=` mean `is`/`is_not`.
 

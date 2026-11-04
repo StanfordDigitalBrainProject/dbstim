@@ -10,112 +10,99 @@ classDiagram
     class Client {
         username
         url
-        metrics() list_of_Metric
-        experiments()
-        create_experiment(name, settings) Experiment
-        experiment(name_or_id) Experiment
+        metrics() list_of_str
+        create(name, filters, count, seed) Experiment
+        open(name, revision) Experiment
+        close()
     }
     class Experiment {
         id
-        summary()
-        subjects
-        publish() Experiment
-        subject(id) Subject
-    }
-    class Subject {
-        id
-        sessions
-        session_ids
-        session(id, directory) Session
+        name
+        revision
+        videos
+        download(folder) Path
+        schedule(subjects, sessions, runs, trials_per_run) Experiment
+        replace(videos, reason) Experiment
+        checkout(subject, session, folder, takeover) Session
     }
     class Session {
-        id
-        run_ids
-        unconfirmed
-        abandoned
-        results
-        with session
-        next_run() Run_or_None
-        download(directory=None) Path
-        record(trial, status, result)
-        run(id) Run
-        start(takeover)
-        finish(status)
+        folder
+        subject
+        session
+        runs
+        run(number) Run
+        sync(client) dict
     }
     class Run {
-        id
-        trials
-        results
-        next_trial() Trial_or_None
-        media(trial, mode) Path_or_URL
-        record(trial, status, result)
+        session
+        number
+        with run
+        iter(run) Trial
+        started(trial, onset)
+        completed(trial, duration, result)
+        abandoned(trial, duration)
     }
     class Trial {
         <<frozen dataclass>>
-        trial_id
-        stimulus_id
-        position
+        number
+        file
+        video_id
         role
-        media_type
-        segment
     }
-    class Segment {
+    class Filter {
         <<frozen dataclass>>
-        start_seconds
-        end_seconds
-    }
-    class MetricFilter {
-        <<frozen dataclass>>
-        metric_id
-        operator
+        metric
+        op
         value
-        to_dict()
     }
-    Client --> Experiment : create or load
-    Experiment --> Subject : subjects
-    Subject --> Session : sessions
-    Session --> Run : next_run
-    Run --> Trial : trials or next_trial
-    Trial --> "0..1" Segment : source interval
-    Client ..> MetricFilter : creation filters
+    Client --> Experiment : create or open
+    Experiment --> Experiment : schedule or replace
+    Experiment --> Session : checkout
+    Session --> Run : run(n)
+    Run --> Trial : for trial in run
+    Client ..> Filter : create filters
 ```
 
-Signatures are shortened; creation settings are keyword arguments.
-`experiment("Exact name")` prefers the latest published revision; if several
-experiments share the name, use `experiment(id="revision-id")`. Close the client
-with `Client.close()` or a `with` block.
+`dbstim.session(folder)` also returns a `Session`, without the network.
 
 ## What the objects mean
 
-- **Experiment:** a saved selection and design; publishing freezes its
-  assignments.
-- **Subject:** one participant's sessions, from a published, hash-verified
-  manifest.
-- **Session:** the presentation claim and progress. `with session:` starts it
-  and finishes it as `completed`, `interrupted` (Ctrl-C or an abandoned trial),
-  or `failed`; `finish(status)` does so by hand. `record()` accepts any trial in
-  the session.
-- **Run:** trials in order; `next_trial()` reads progress from the server.
-  `results` is a property holding the recorded results, not a method.
-- **Trial:** an immutable assignment, not a player or progress record. Positions
-  start at 1 in each run; roles are `parent`, `repeat`, or `foil`.
-- **Segment:** the optional source interval. First halves and their foils are
-  already cut; play them from time zero.
-- **MetricFilter:** metric, comparison operator (`">="` or `"gte"`; `"=="`/`"!="`
-  with `True`/`False`), and threshold.
-- **Metric:** one filterable metric from `client.metrics()`.
+- **Client:** your signed-in account. Close it with `close()` or a `with`
+  block.
+- **Experiment:** one frozen revision of a selection. `create()` saves
+  revision 1 and refuses a name you already use; `open(name)` gives the
+  latest revision, `open(name, revision=2)` an earlier one, and `open(id=...)`
+  an exact one. `schedule()` and `replace()` return a new revision and leave
+  this one unchanged. `videos` lists catalog ids in manifest order.
+- **Session:** one checked-out subject session in a folder. `runs` is the
+  tuple of run numbers, such as `(1, 2)`. Opening it and recording never use
+  the network; `sync()` does.
+- **Run:** one block of trials. Use it in a `with` block; iterating yields the
+  trials with no outcome yet, in order. Record each trial `started`, then
+  `completed` or `abandoned`; out-of-order calls raise `ValueError`.
+- **Trial:** an assigned presentation. `number` counts from 1 in the run,
+  `file` is the local movie path, `video_id` the catalog id, and `role` is
+  `"video"`, `"repeat"` or `"foil"`. Foil halves are already cut: play them
+  from time zero.
+- **Filter:** a metric condition such as `Filter("duration_seconds", ">=", 10)`.
+  Use `>`, `>=`, `<`, `<=` or `==` with numbers, and `==` or `!=` with
+  `True`/`False`. A video must match every filter.
 
-`session.next_run()` returns the first run with unfinished trials, or `None`;
-`session.run("latest")` returns the most recently started run. A trial recorded
-`started` with no ending, listed in `session.unconfirmed`, blocks `next_trial()`
-in every run until you record it `completed` or `abandoned`.
-`session.abandoned` lists every abandoned trial, with or without a result;
-`session.results` lists only the result payloads you recorded, each with its
-status. `run.media(trial)` returns a verified file from the per-user cache,
-downloading it first if needed.
+`run.started(trial, onset=...)` takes seconds from your run's time zero.
+`run.completed(trial, duration=..., result=...)` takes the seconds shown and
+an optional plain-JSON `dict`. Timing accepts NumPy numbers; inside a result,
+convert them with `int()` or `float()`. `run.abandoned(trial)` takes an optional `duration`.
 
-Workflow classes are in `src/dbstim/workflow.py`, sign-in in `client.py`, and
-frozen data types in `models.py`. Video is currently the only supported media
-type. Your PGL or PsychoPy task presents the video; **the server owns progress**.
+## Errors
 
-[Metric storage and filters](metrics-and-filters.md) · [Media and session flow](server-to-local-flow.md) · [Recovery](recovery.md)
+- `ValueError`: a bad argument, before any request or write.
+- `ApiError`: the server refused or failed; `status` is the HTTP code, or
+  `None` when the connection failed.
+- `SyncError` (an `ApiError`): some runs were refused at sync; see
+  [recovery](recovery.md).
+- `RuntimeError`: the session is open in another recorder or sync.
+
+Older 0.5 calls (`create_experiment`, `experiment`, `experiments`, `publish`,
+`summary`, `MetricFilter`) remain but are not part of this workflow.
+
+[Metric storage and filters](metrics-and-filters.md) · [Data flow](server-to-local-flow.md) · [Recovery](recovery.md)
